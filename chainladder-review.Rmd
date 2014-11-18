@@ -1,25 +1,47 @@
 ---
 title: "ChainLadder Package in Action"
 author: "Andy Merlino"
-date: "Friday, November 14, 2014"
+date: "Tuesday, November 18, 2014"
 output: html_document
 ---
 
-The CAS website has some good historic insurance loss data sets for use in the ChainLadder package.  This study uses the CAS data to access the accuracy of the different ChainLadder reserving functions.
+### Purpose
 
-## The data
+The `ChainLadder` package includes methods for projecting insurance loss reserves.  For more information please see the [package vignette](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf).  This document aims to measure the accuracy of the different reserving methods available in the `ChainLadder` package by comparing the package projections to historical data.
 
-The CAS data sets include insrance loss data from 
+### Data
 
-```{r packages_data}
+The CAS website provides historic U.S. insurance loss data accross 6 different lines of business and many different companies.  The data includes complete triangles from origin years 1988 through 1997.  We will use data from origin years 1988 through 1997 evaluated as of 1997 to run the `ChainLadder` projections.  The data will be projected out to the 10th development year and compared to actual loss data at that time.  For more information on the data see the [CAS webpage](http://www.casact.org/research/index.cfm?fa=loss_reserves_data).
+
+```{r packages_data, message = FALSE}
+# load the ChainLadder package
 library(ChainLadder) # install.packages("ChainLadder")
+# load the CAS data
 library(casdata) # devtools::install_github("merlinoa/casdata")
 ```
 
-You can also embed plots, for example:
+### A little data cleaning
 
-```{r, echo=FALSE}
-plot(cars)
+A good portion of the companies in the data sets are missing loss information for a portion of the origin years (e.g for workers compensation 70 out of 132).  We are going to remove these copanies from our analysis.
+
+```{r data_cleaning}
+# workers' compensation
+wk_id <- unique(wkcomp$GRCODE)
+
+wkcomp_missing <- rep(NA, length(wk_id))
+for (i in seq_along(wk_id)) {
+  if (any(wkcomp$IncurLoss_D[wkcomp$GRCODE == wk_id[i]] <= 0)) {
+    wkcomp_missing[i] <- wk_id[i] 
+  }
+}
+
+wkcomp_missing <- wkcomp_missing[!is.na(wkcomp_missing)]
+
+wkcomp_clean <- wkcomp[-which(wkcomp$GRCODE %in% wkcomp_missing), ]
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+### The Mack Method
+
+```{r mack}
+
+```
