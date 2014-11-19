@@ -7,7 +7,7 @@ output: pdf_document
 
 ### Purpose
 
-The `ChainLadder` package includes methods for projecting insurance loss reserves.  For more information please see the [package vignette](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf).  This document aims to measure the accuracy of the different reserving methods available in the `ChainLadder` package by comparing the package projections to historical data.
+The `ChainLadder` package includes methods for projecting insurance loss reserves.  For more information please see the `ChainLadder` [package vignette](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf).  This document aims to measure the accuracy of the different reserving methods available in the `ChainLadder` package by comparing the package projections to historical data.
 
 ### Data
 
@@ -23,28 +23,31 @@ The CAS website provides historic U.S. insurance loss data accross 6 different l
 For more information on the data see the [CAS webpage](http://www.casact.org/research/index.cfm?fa=loss_reserves_data).
 
 ```{r packages_data, message = FALSE}
-# load the ChainLadder package
 library(ChainLadder) # install.packages("ChainLadder")
-# load the CAS data
-library(casdata) # devtools::install_github("merlinoa/casdata")
-library(dplyr)
-library(pander)
 
+library(dplyr) # for data manipulation
+library(pander) # for creating tables
+
+# package I created to store CAS data
+library(casdata) # devtools::install_github("merlinoa/casdata")
+
+# pander options
 panderOptions('table.split.table', Inf)
 panderOptions('table.alignment.default', 'right')
 ```
 
 ### A little data cleaning
 
-A good portion of the companies in the data sets are missing loss information for a portion of the origin years (e.g for workers compensation 70 out of 132).  We are going to remove these companies from our analysis.
+A good portion of the companies in the data sets are missing loss information for a portion of the origin years (e.g for workers compensation 70 out of 132 do not have loss information for all origin years at all development years).  We are going to remove companies with missing or very small loss amounts.
 
 ```{r data_cleaning}
 # Combine data sets into a list 
 data_sets <- list(wkcomp, ppauto, prodliab, comauto, medmal, othliab)
 
-# identiy unique companies in each data set that have missing data
+# identify unique companies in each data set that have missing data
 # I also had some trouble with companies that had very small losses, so I decided
-# to remove all companies with losses less than 100 at any observation from the data set.
+# to remove all companies with cumulative paid losses less than 100 
+# at any observation in the data set.
 id_missing_data <- lapply(data_sets, function(x) unique(x$GRCODE[x[, 7] <= 100]))
 
 # remove companies that have missing data
@@ -59,12 +62,14 @@ for (i in seq_along(data_sets)) {
 First we need to make the triangles.  We will look at the paid triangles first.
 
 ```{r wc_paid_tri}
+# isolate workers' compensation data
 wkcomp_clean <- data_sets[[1]]
 
+# find unique GRCODEs for looping
 wkcomp_id <- unique(wkcomp_clean$GRCODE)
 
+# create triangles for each company using `ChainLadder` package
 paid_tri <- vector("list", length(wkcomp_id))
-
 for (i in seq_along(wkcomp_id)) {
   paid_tri[[i]] <- as.triangle(wkcomp_clean[wkcomp_clean$GRCODE == wkcomp_id[i] & 
                                       wkcomp_clean$AccidentYear + 
@@ -74,6 +79,7 @@ for (i in seq_along(wkcomp_id)) {
                                value = "CumPaidLoss_D")
 }
 ```
+
 
 ### Mack Method
 
@@ -92,11 +98,7 @@ rownames(mack_smry) <- NULL
 mack_smry <- data.frame(wkcomp_id, mack_smry)
 names(mack_smry) <- c("GRCODE", "Latest", "Ultimate", "IBNR", "Mack S.E.")
 
-```
-
-## Find Actual Ultimate Losses for Each company used in Mack Method
-
-```{r}
+# compare Mack projections to actual losses
 actual_paid <- filter(wkcomp_clean, DevelopmentLag == 10) %>%
   group_by(GRCODE) %>%
   summarise(actual_ultimate = sum(CumPaidLoss_D))
@@ -107,3 +109,5 @@ mack_smry_f <- data.frame(mack_smry[, 1, drop = FALSE], format(round(mack_smry[2
                                                                big.mark = ","))
 pander(mack_smry_f, justify = "right")
 ```
+
+Let's check to see how well the Mack projection fit the stacks up against the actual historical loss data.
