@@ -2,7 +2,7 @@
 title: "ChainLadder Package in Action"
 author: "Andy Merlino"
 date: "Tuesday, November 18, 2014"
-output: html_document
+output: pdf_document
 ---
 
 ### Purpose
@@ -13,6 +13,12 @@ The `ChainLadder` package includes methods for projecting insurance loss reserve
 
 The CAS website provides historic U.S. insurance loss data accross 6 different lines of business and many different companies.  The data includes complete triangles from origin years 1988 through 1997.  We will use data from origin years 1988 through 1997 evaluated as of 1997 to run the `ChainLadder` projections.  The data will be projected out to the 10th development year and compared to actual loss data at that time.  The CAS data sets include data from the following lines of business:
 
+* Workers' Compensation
+* Private Passenger Auto
+* Commercial Auto
+* Medical Malpractice
+* Other Liability
+* Product liability
 
 For more information on the data see the [CAS webpage](http://www.casact.org/research/index.cfm?fa=loss_reserves_data).
 
@@ -21,8 +27,11 @@ For more information on the data see the [CAS webpage](http://www.casact.org/res
 library(ChainLadder) # install.packages("ChainLadder")
 # load the CAS data
 library(casdata) # devtools::install_github("merlinoa/casdata")
-library(exhibit)
+library(dplyr)
 library(pander)
+
+panderOptions('table.split.table', Inf)
+panderOptions('table.alignment.default', 'right')
 ```
 
 ### A little data cleaning
@@ -36,11 +45,12 @@ data_sets <- list(wkcomp, ppauto, prodliab, comauto, medmal, othliab)
 # identiy unique companies in each data set that have missing data
 # I also had some trouble with companies that had very small losses, so I decided
 # to remove all companies with losses less than 100 at any observation from the data set.
-id_missing_data <- lapply(data_sets, function(x) unique(x$GRCODE[x[, 6] <= 100]))
+id_missing_data <- lapply(data_sets, function(x) unique(x$GRCODE[x[, 7] <= 100]))
 
 # remove companies that have missing data
 for (i in seq_along(data_sets)) {
-  data_sets[[i]] <- data_sets[[i]][-which(data_sets[[i]]$GRCODE %in% id_missing_data[[i]]), ]
+  data_sets[[i]] <- data_sets[[i]][-which(data_sets[[i]]$GRCODE %in% 
+                                            id_missing_data[[i]]), ]
 }
 ```
 
@@ -57,7 +67,8 @@ paid_tri <- vector("list", length(wkcomp_id))
 
 for (i in seq_along(wkcomp_id)) {
   paid_tri[[i]] <- as.triangle(wkcomp_clean[wkcomp_clean$GRCODE == wkcomp_id[i] & 
-                                      wkcomp_clean$AccidentYear + wkcomp_clean$DevelopmentLag < 1999, ], 
+                                      wkcomp_clean$AccidentYear + 
+                                      wkcomp_clean$DevelopmentLag < 1999, ], 
                                origin = "AccidentYear", 
                                dev = "DevelopmentLag", 
                                value = "CumPaidLoss_D")
@@ -66,13 +77,33 @@ for (i in seq_along(wkcomp_id)) {
 
 ### Mack Method
 
-```{r wc_mack, results = "asis"}
-wc_mack <- lapply(paid_tri[1:20], MackChainLadder, est.sigma = "Mack")
-```
+```{r wc_mack, warning = FALSE}
+# run mack model as provided in ChainLadder package
+wc_mack <- lapply(paid_tri, MackChainLadder, est.sigma = "Mack")
 
-```{r}
+# select relevant value for comparison to actual loss values
 mack_smry <- vector("list", length(wc_mack))
 for (i in seq_along(wc_mack)) {
-  mack_smry[[i]] <- summary(wc_mack[[i]])[[2]]$Totals[3:5]
+  mack_smry[[i]] <- summary(wc_mack[[i]])[[2]]$Totals[c(1, 3:5)]
 }
+
+mack_smry <- as.data.frame(t(as.data.frame(mack_smry)))
+rownames(mack_smry) <- NULL
+mack_smry <- data.frame(wkcomp_id, mack_smry)
+names(mack_smry) <- c("GRCODE", "Latest", "Ultimate", "IBNR", "Mack S.E.")
+
+```
+
+## Find Actual Ultimate Losses for Each company used in Mack Method
+
+```{r}
+actual_paid <- filter(wkcomp_clean, DevelopmentLag == 10) %>%
+  group_by(GRCODE) %>%
+  summarise(actual_ultimate = sum(CumPaidLoss_D))
+
+mack_smry <- left_join(mack_smry, actual_paid, by = "GRCODE")
+
+mack_smry_f <- data.frame(mack_smry[, 1, drop = FALSE], format(round(mack_smry[2:6], 0), 
+                                                               big.mark = ","))
+pander(mack_smry_f, justify = "right")
 ```
