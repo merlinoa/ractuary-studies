@@ -7,7 +7,7 @@ output: pdf_document
 
 ### Purpose
 
-The `ChainLadder` package includes methods for projecting insurance loss reserves.  For more information please see the `ChainLadder` [package vignette](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf).  This document aims to measure the accuracy of the different reserving methods available in the `ChainLadder` package by comparing the package projections to historical data.
+The `ChainLadder` package includes methods for projecting insurance loss reserves.  For more information on the `ChainLadder` package please see the [package vignette](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf).  This document will compare `ChainLadder` projections to actual historic losses to measure the accuracy of the different `ChainLadder` reserving methods.
 
 ### Data
 
@@ -110,4 +110,9 @@ mack_smry_f <- data.frame(mack_smry[, 1, drop = FALSE], format(round(mack_smry[2
 pander(mack_smry_f, justify = "right")
 ```
 
-Let's check to see how well the Mack projection fit the stacks up against the actual historical loss data.
+Let's check to see how well the Mack projection stacks up against the actual historical loss data.  Quickly we can check the percentage of actual ultimate losses that fall within one Mack S.E. of the projected ultimate losses.
+
+```{r}
+ifelse (mack_smry[, 5] > abs(mack_smry$actual_ultimate - mack_smry$ultimate),
+        0, 1) 
+```
