@@ -1,15 +1,24 @@
 ---
 title: "ChainLadder Package in Action"
 author: "Andy Merlino"
-date: "Tuesday, November 18, 2014"
-output: pdf_document
+date: "Wednesday, December 3, 2014"
+output: 
+    pdf_document:
+        includes:
+            in_header: mystyles.sty
+fontsize: 11pt
+geometry: margin=1in
 ---
 
-### Purpose
+# Background
 
-The `ChainLadder` package includes methods for projecting insurance loss reserves.  For more information please see the `ChainLadder` [package vignette](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf).  This document aims to measure the accuracy of the different reserving methods available in the `ChainLadder` package by comparing the package projections to historical data.
+The `ChainLadder` package includes methods for projecting insurance loss reserves.  For more information about the `ChainLadder` package please see the `ChainLadder` [package vignette](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf).  
 
-### Data
+# Purpose
+
+This document aims to measure the accuracy of the different reserving methods available in the `ChainLadder` package by comparing the package projections to actual insurance loss data.
+
+# Data
 
 The CAS website provides historic U.S. insurance loss data accross 6 different lines of business and many different companies.  The data includes complete triangles from origin years 1988 through 1997.  We will use data from origin years 1988 through 1997 evaluated as of 1997 to run the `ChainLadder` projections.  The data will be projected out to the 10th development year and compared to actual loss data at that time.  The CAS data sets include data from the following lines of business:
 
@@ -24,21 +33,17 @@ For more information on the data see the [CAS webpage](http://www.casact.org/res
 
 ```{r packages_data, message = FALSE}
 library(ChainLadder) # install.packages("ChainLadder")
-
 library(dplyr) # for data manipulation
-library(pander) # for creating tables
+library(xtable)
+options(xtable.comment = FALSE)
 
 # package I created to store CAS data
 library(casdata) # devtools::install_github("merlinoa/casdata")
-
-# pander options
-panderOptions('table.split.table', Inf)
-panderOptions('table.alignment.default', 'right')
 ```
 
 ### A little data cleaning
 
-A good portion of the companies in the data sets are missing loss information for a portion of the origin years (e.g for workers compensation 70 out of 132 do not have loss information for all origin years at all development years).  We are going to remove companies with missing or very small loss amounts.
+A good portion of the companies in the data sets are missing loss information for a portion of the origin years (e.g for workers compensation 70 out of 132 do not have loss information for all origin years at all development periods).  We are going to remove companies with missing or very small loss amounts.
 
 ```{r data_cleaning}
 # Combine data sets into a list 
@@ -48,7 +53,7 @@ data_sets <- list(wkcomp, ppauto, prodliab, comauto, medmal, othliab)
 # I also had some trouble with companies that had very small losses, so I decided
 # to remove all companies with cumulative paid losses less than 100 
 # at any observation in the data set.
-id_missing_data <- lapply(data_sets, function(x) unique(x$GRCODE[x[, 7] <= 100]))
+id_missing_data <- lapply(data_sets, function(x) unique(x$GRCODE[x[, 7] <= 500]))
 
 # remove companies that have missing data
 for (i in seq_along(data_sets)) {
@@ -83,7 +88,7 @@ for (i in seq_along(wkcomp_id)) {
 
 ### Mack Method
 
-```{r wc_mack, warning = FALSE}
+```{r wc_mack, warning = FALSE, results = "asis"}
 # run mack model as provided in ChainLadder package
 wc_mack <- lapply(paid_tri, MackChainLadder, est.sigma = "Mack")
 
@@ -96,18 +101,49 @@ for (i in seq_along(wc_mack)) {
 mack_smry <- as.data.frame(t(as.data.frame(mack_smry)))
 rownames(mack_smry) <- NULL
 mack_smry <- data.frame(wkcomp_id, mack_smry)
-names(mack_smry) <- c("GRCODE", "Latest", "Ultimate", "IBNR", "Mack S.E.")
+names(mack_smry) <- c("GRCODE", "latest", "ultimate", "ibnr", "mack_se")
 
-# compare Mack projections to actual losses
+# find actual losses at development period 10
 actual_paid <- filter(wkcomp_clean, DevelopmentLag == 10) %>%
   group_by(GRCODE) %>%
   summarise(actual_ultimate = sum(CumPaidLoss_D))
 
+# group actual losses with mack projections
 mack_smry <- left_join(mack_smry, actual_paid, by = "GRCODE")
 
-mack_smry_f <- data.frame(mack_smry[, 1, drop = FALSE], format(round(mack_smry[2:6], 0), 
-                                                               big.mark = ","))
-pander(mack_smry_f, justify = "right")
+# format data frame for printing
+mack_smry_f <- xtable(mack_smry, digits = 0, 
+                      align = "ccrrrrr",
+                      display = c("d", "s", "d", "d", "d", "d", "d"))
+
+# print data frame as LaTeX table
+print(mack_smry_f,
+      tabular.environment = 'longtable',
+      floating = FALSE,
+      include.rownames = FALSE,
+      format.args = list(big.mark = ","))
 ```
 
-Let's check to see how well the Mack projection fit the stacks up against the actual historical loss data.
+Well I guess the projections are pretty accurate, but it is hard to tell in this table.  Let's see how many of the actual loss amounts fell within 1 Mack S.E. of the projection.
+
+```{r}
+# compare absolute value of Mack projection - actual ultimate to mack se
+out_one_se <- abs(mack_smry$ultimate - mack_smry$actual_ultimate) > 
+                  mack_smry$mack_se
+out_two_se <- abs(mack_smry$ultimate - mack_smry$actual_ultimate) > 
+                 (mack_smry$mack_se * 2)
+
+n <- nrow(mack_smry)
+
+one_se <- (n - sum(out_one_se)) / n 
+two_se <- (n - sum(out_two_se)) / n 
+```
+
+A quick review of the projections shows us that only `r round(one_se * 100, 1)`% of the actual insurence loss amounts were within one Mack S.E. of the projected ultimate loss amounts, and  `r round(two_se * 100, 1)`% were within two Mack S.E.
+
+\pagebreak
+
+```{r}
+
+mack_smry[out_two_se, ]
+```
