@@ -144,6 +144,6 @@ A quick review of the projections shows us that only `r round(one_se * 100, 1)`%
 \pagebreak
 
 ```{r}
-
+# review of companies outside two mack se
 mack_smry[out_two_se, ]
 ```
