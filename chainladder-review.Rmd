@@ -31,29 +31,34 @@ The CAS website provides historic U.S. insurance loss data accross 6 different l
 
 For more information on the data see the [CAS webpage](http://www.casact.org/research/index.cfm?fa=loss_reserves_data).
 
-```{r packages_data, message = FALSE}
+```{r packages_data, message = FALSE, echo = FALSE}
 library(ChainLadder) # install.packages("ChainLadder")
 library(dplyr) # for data manipulation
+library(reshape2) # data manipulation
 library(xtable)
 options(xtable.comment = FALSE)
 
 # package I created to store CAS data
 library(casdata) # devtools::install_github("merlinoa/casdata")
+# package I created to transform ChainLadder classes into
+# data frames that can be easily printed to pdf
+library(exhibit) # devtools::install_github("merlinoa/exhibit")
+small_cut <- 200 # for small loss amounts cut off size
 ```
 
 ### A little data cleaning
 
-A good portion of the companies in the data sets are missing loss information for a portion of the origin years (e.g for workers compensation 70 out of 132 do not have loss information for all origin years at all development periods).  We are going to remove companies with missing or very small loss amounts.
+A good portion of the companies in the data sets are missing loss information for a portion of the origin years (e.g for workers compensation 70 out of 132 do not have loss information for all origin years at all development periods).  In addition to companies with missing loss information we removed companies any cumulative with paid loss amounts less than `r small_cut`. To see all the code used to clean the data and all code used in the analysis see the [.Rmd file on github](https://raw.githubusercontent.com/merlinoa/ractuary-studies/master/chainladder-review.Rmd).
 
-```{r data_cleaning}
+```{r data_cleaning, echo = FALSE}
 # Combine data sets into a list 
 data_sets <- list(wkcomp, ppauto, prodliab, comauto, medmal, othliab)
 
 # identify unique companies in each data set that have missing data
 # I also had some trouble with companies that had very small losses, so I decided
-# to remove all companies with cumulative paid losses less than 100 
+# to remove all companies with cumulative paid losses less than some value 
 # at any observation in the data set.
-id_missing_data <- lapply(data_sets, function(x) unique(x$GRCODE[x[, 7] <= 500]))
+id_missing_data <- lapply(data_sets, function(x) unique(x$GRCODE[x[, 7] <= small_cut]))
 
 # remove companies that have missing data
 for (i in seq_along(data_sets)) {
@@ -62,11 +67,81 @@ for (i in seq_along(data_sets)) {
 }
 ```
 
-### Workers' Compensation
+# Analysis
 
-First we need to make the triangles.  We will look at the paid triangles first.
+Several steps are invloved in creating the desired visualizations from the cleaned data.  An example of each of these steps is outlined in \hyperref[appendix:a]{Appendix A}(Appendix A) for the Mack Method on paid workers' compensation losses. 
 
-```{r wc_paid_tri}
+```{r z_function}
+# param clean_data the cleaned insurance loss data frame
+# param lob numeric the desired line of business location
+# param loss_type character "paid" or "incurred"
+triangles <- function(clean_data, lob, loss_type) {
+ # isolate data for individual line of business
+ lb <- data_sets[[lob]]
+
+ # find unique GRCODEs for looping
+ lb_id <- unique(lb$GRCODE)
+
+ loss_col_name <- if (loss_type == "paid") {
+   names(lb)[7]
+ } else {
+   names(lb)[6]
+ }
+ 
+ # create triangles for each company using `ChainLadder` package
+ tri <- vector("list", length(lb_id))
+ for (i in seq_along(lb_id)) {
+   tri[[i]] <- as.triangle(lb[lb$GRCODE == lb_id[i] & 
+                                      lb$AccidentYear + 
+                                      lb$DevelopmentLag < 1999, ], 
+                               origin = "AccidentYear", 
+                               dev = "DevelopmentLag", 
+                               value = loss_col_name)
+ }
+ tri
+}
+
+# define function for paid lapply
+paid_tris <- function(x) {
+  triangles(clean_data = data_sets, 
+                         lob = x,
+                         loss_type = "paid")
+}
+
+# define function for incurred lapply
+incurred_tris <- function(x) {
+  triangles(clean_data = data_sets, 
+                         lob = x,
+                         loss_type = "incurred")
+}
+
+# use above functions to create paid and incurred triangles for all lines 
+# of business
+paid_triangles <- lapply(1:6, paid_tris)
+incurred_triangles <- lapply(1:6, incurred_tris)
+
+
+# function for mack
+# param triangle_list
+mack_f <- function(triangle_list) {
+  
+}
+
+```
+
+# Conclusions
+
+
+
+# Appendix A: Paid Workers' Compensation Mack Method
+
+\label{appendix:a}
+
+### 1. Creating Triangles
+
+First we need to make the triangles.  `triangle` is an S3 class from the `ChainLadder` package that we can create using the `as.triangle()` function.  The following is a triangle from one of the workers' compensation companies chosen at random.
+
+```{r wc_paid_tri, echo = FALSE, results = "asis", echo = FALSE}
 # isolate workers' compensation data
 wkcomp_clean <- data_sets[[1]]
 
@@ -83,15 +158,35 @@ for (i in seq_along(wkcomp_id)) {
                                dev = "DevelopmentLag", 
                                value = "CumPaidLoss_D")
 }
+
+
+eg_paid_tri <- xtable(exhibit(paid_tri[[2]]),
+                      digits = 0)
+print(eg_paid_tri,
+      format.args = list(big.mark = ","))
 ```
 
+### 2. Run the Mack Method
 
-### Mack Method
+We can apply the `ChainLadder` function `MackChainLadder()` to each of our triangles.  The following table is what the Mack method looks like applied to the triangle above.
 
-```{r wc_mack, warning = FALSE, results = "asis"}
+```{r wc_mack, warning = FALSE, results = "asis", echo = FALSE}
 # run mack model as provided in ChainLadder package
 wc_mack <- lapply(paid_tri, MackChainLadder, est.sigma = "Mack")
 
+# example of Mack method for company displayed in triangle above
+eg_wc_mack <- xtable(exhibit(wc_mack[[2]]),
+                      digits = c(0, 0, 2, 0, 0, 0))
+print(eg_wc_mack,
+      tabular.environment = 'longtable',
+      floating = FALSE,
+      format.args = list(big.mark = ","))
+```
+
+
+Now for all the workers' compensation companies in our analysis.
+
+```{r wc_mack_smry, warning = FALSE, results = "asis", echo = FALSE}
 # select relevant value for comparison to actual loss values
 mack_smry <- vector("list", length(wc_mack))
 for (i in seq_along(wc_mack)) {
@@ -110,6 +205,8 @@ actual_paid <- filter(wkcomp_clean, DevelopmentLag == 10) %>%
 
 # group actual losses with mack projections
 mack_smry <- left_join(mack_smry, actual_paid, by = "GRCODE")
+mack_smry <- mutate(mack_smry, actual_ibnr = actual_ultimate - latest)
+mack_smry <- mack_smry[, -6]
 
 # format data frame for printing
 mack_smry_f <- xtable(mack_smry, digits = 0, 
@@ -124,13 +221,15 @@ print(mack_smry_f,
       format.args = list(big.mark = ","))
 ```
 
-Well I guess the projections are pretty accurate, but it is hard to tell in this table.  Let's see how many of the actual loss amounts fell within 1 Mack S.E. of the projection.
+### 3. Compare Mack Projections to Actual IBNR
 
-```{r}
+Let's see how many of the actual IBNR amounts fell within 1 and 2 Mack S.E. of the projection.
+
+```{r, echo = FALSE}
 # compare absolute value of Mack projection - actual ultimate to mack se
-out_one_se <- abs(mack_smry$ultimate - mack_smry$actual_ultimate) > 
+out_one_se <- abs(mack_smry$ibnr - mack_smry$actual_ibnr) > 
                   mack_smry$mack_se
-out_two_se <- abs(mack_smry$ultimate - mack_smry$actual_ultimate) > 
+out_two_se <- abs(mack_smry$ibnr - mack_smry$actual_ibnr) > 
                  (mack_smry$mack_se * 2)
 
 n <- nrow(mack_smry)
@@ -141,9 +240,11 @@ two_se <- (n - sum(out_two_se)) / n
 
 A quick review of the projections shows us that only `r round(one_se * 100, 1)`% of the actual insurence loss amounts were within one Mack S.E. of the projected ultimate loss amounts, and  `r round(two_se * 100, 1)`% were within two Mack S.E.
 
-\pagebreak
+Let's investigate if the Mack IBNR projection has a tendency of being higher or lower than the actual IBNR.
 
 ```{r}
 # review of companies outside two mack se
-mack_smry[out_two_se, ]
+mack_smry$h_l <- (mack_smry$actual_ibnr - mack_smry$ibnr) / mack_smry$mack_se
+  
+mack_smry
 ```
