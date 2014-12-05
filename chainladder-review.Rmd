@@ -6,7 +6,7 @@ output:
     pdf_document:
         includes:
             in_header: mystyles.sty
-fontsize: 11pt
+fontsize: 12pt
 geometry: margin=1in
 ---
 
@@ -98,6 +98,7 @@ triangles <- function(clean_data, lob, loss_type) {
                                dev = "DevelopmentLag", 
                                value = loss_col_name)
  }
+ names(tri) <- lb_id
  tri
 }
 
@@ -122,9 +123,71 @@ incurred_triangles <- lapply(1:6, incurred_tris)
 
 
 # function for mack
-# param triangle_list
-mack_f <- function(triangle_list) {
+# param lob_triangles object returned from above functions
+mack_f <- function(lob_triangles) {
+  # run mack model as provided in ChainLadder package
+  lob_mack <- lapply(lob_triangles, MackChainLadder, est.sigma = "Mack")
   
+  # extract the good stuff from the mack projection
+  mack_smry <- vector("list", length(lob_mack))
+  for (i in seq_along(lob_mack)) {
+    mack_smry[[i]] <- summary(lob_mack[[i]])[[2]]$Totals[c(1, 4:5)]
+  }
+
+  mack_smry <- as.data.frame(t(as.data.frame(mack_smry)))
+  rownames(mack_smry) <- NULL
+  mack_smry <- data.frame(names(lob_triangles), mack_smry)
+  names(mack_smry) <- c("GRCODE", "latest", "ultimate", "ibnr", "mack_se")
+  mack_smry
+}
+  
+
+actual_ultimate <- function(clean_data) {
+  # find actual losses at development period 10
+  # make individual function for this
+  loss_col_name <- if (loss_type == "paid") {
+     names(lb)[7]
+   } else {
+     names(lb)[6]
+   }
+  
+  
+  filter(clean_data, DevelopmentLag == 10) %>%
+    group_by(GRCODE) %>%
+    summarise(actual_ultimate = loss_col_name)
+}
+  # group actual losses with mack projections
+  mack_smry <- left_join(mack_smry, actual_paid, by = "GRCODE")
+  mack_smry <- mutate(mack_smry, actual_ibnr = actual_ultimate - latest)
+  mack_smry <- mack_smry[, -6]
+```
+
+### 3. Compare Mack Projections to Actual IBNR
+
+Let's see how many of the actual IBNR amounts fell within 1 and 2 Mack S.E. of the projection.
+
+```{r, echo = FALSE}
+# compare absolute value of Mack projection - actual ultimate to mack se
+out_one_se <- abs(mack_smry$ibnr - mack_smry$actual_ibnr) > 
+                  mack_smry$mack_se
+out_two_se <- abs(mack_smry$ibnr - mack_smry$actual_ibnr) > 
+                 (mack_smry$mack_se * 2)
+
+n <- nrow(mack_smry)
+
+one_se <- (n - sum(out_one_se)) / n 
+two_se <- (n - sum(out_two_se)) / n 
+```
+
+A quick review of the projections shows us that only `r round(one_se * 100, 1)`% of the actual insurence loss amounts were within one Mack S.E. of the projected ultimate loss amounts, and  `r round(two_se * 100, 1)`% were within two Mack S.E.
+
+Let's investigate if the Mack IBNR projection has a tendency of being higher or lower than the actual IBNR.
+
+```{r}
+# review of companies outside two mack se
+mack_smry$h_l <- (mack_smry$actual_ibnr - mack_smry$ibnr) / mack_smry$mack_se
+  
+mack_smry
 }
 
 ```
