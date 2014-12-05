@@ -71,119 +71,100 @@ for (i in seq_along(data_sets)) {
 
 Several steps are invloved in creating the desired visualizations from the cleaned data.  An example of each of these steps is outlined in \hyperref[appendix:a]{Appendix A}(Appendix A) for the Mack Method on paid workers' compensation losses. 
 
-```{r z_function}
-# param clean_data the cleaned insurance loss data frame
-# param lob numeric the desired line of business location
+```{r create_function, echo = FALSE}
+# param lob the cleaned insurance loss data frame
 # param loss_type character "paid" or "incurred"
-triangles <- function(clean_data, lob, loss_type) {
- # isolate data for individual line of business
- lb <- data_sets[[lob]]
+triangles <- function(lob, loss_type) {
 
  # find unique GRCODEs for looping
- lb_id <- unique(lb$GRCODE)
+ lob_id <- unique(lob$GRCODE)
 
  loss_col_name <- if (loss_type == "paid") {
-   names(lb)[7]
+   names(lob)[7]
  } else {
-   names(lb)[6]
+   names(lob)[6]
  }
  
  # create triangles for each company using `ChainLadder` package
- tri <- vector("list", length(lb_id))
- for (i in seq_along(lb_id)) {
-   tri[[i]] <- as.triangle(lb[lb$GRCODE == lb_id[i] & 
-                                      lb$AccidentYear + 
-                                      lb$DevelopmentLag < 1999, ], 
+ tri <- vector("list", length(lob_id))
+ for (i in seq_along(lob_id)) {
+   tri[[i]] <- as.triangle(lob[lob$GRCODE == lob_id[i] & 
+                                      lob$AccidentYear + 
+                                      lob$DevelopmentLag < 1999, ], 
                                origin = "AccidentYear", 
                                dev = "DevelopmentLag", 
                                value = loss_col_name)
  }
- names(tri) <- lb_id
+ names(tri) <- lob_id
  tri
-}
-
-# define function for paid lapply
-paid_tris <- function(x) {
-  triangles(clean_data = data_sets, 
-                         lob = x,
-                         loss_type = "paid")
-}
-
-# define function for incurred lapply
-incurred_tris <- function(x) {
-  triangles(clean_data = data_sets, 
-                         lob = x,
-                         loss_type = "incurred")
 }
 
 # use above functions to create paid and incurred triangles for all lines 
 # of business
-paid_triangles <- lapply(1:6, paid_tris)
-incurred_triangles <- lapply(1:6, incurred_tris)
+paid_triangles <- lapply(data_sets, triangles, loss_type = "paid")
+incurred_triangles <- lapply(data_sets, triangles, loss_type = "incurred")
+```
 
-
+```{r mack_projections, warning = FALSE}
 # function for mack
 # param lob_triangles object returned from above functions
-mack_f <- function(lob_triangles) {
+mack_f <- function(lob_triangle) {
   # run mack model as provided in ChainLadder package
-  lob_mack <- lapply(lob_triangles, MackChainLadder, est.sigma = "Mack")
+  lob_mack <- lapply(lob_triangle, MackChainLadder, est.sigma = "Mack")
   
   # extract the good stuff from the mack projection
   mack_smry <- vector("list", length(lob_mack))
   for (i in seq_along(lob_mack)) {
-    mack_smry[[i]] <- summary(lob_mack[[i]])[[2]]$Totals[c(1, 4:5)]
+    mack_smry[[i]] <- summary(lob_mack[[i]])[[2]]$Totals[c(1, 3:5)]
   }
 
   mack_smry <- as.data.frame(t(as.data.frame(mack_smry)))
   rownames(mack_smry) <- NULL
-  mack_smry <- data.frame(names(lob_triangles), mack_smry)
+  mack_smry <- data.frame(names(lob_triangle), mack_smry)
   names(mack_smry) <- c("GRCODE", "latest", "ultimate", "ibnr", "mack_se")
   mack_smry
 }
-  
 
-actual_ultimate <- function(clean_data) {
+paid_mack_smry <- lapply(paid_triangles, mack_f)
+incurred_mack_smry <- lapply(incurred_triangles, mack_f)
+```
+
+```{r}
+
+actual_ultimate <- function(lob, loss_type) {
   # find actual losses at development period 10
   # make individual function for this
   loss_col_name <- if (loss_type == "paid") {
-     names(lb)[7]
+     names(lob)[7]
    } else {
-     names(lb)[6]
+     names(lob)[6]
    }
   
-  
-  filter(clean_data, DevelopmentLag == 10) %>%
-    group_by(GRCODE) %>%
-    summarise(actual_ultimate = loss_col_name)
+  dev_10 <- lob[lob$DevelopmentLag == 10, ]
+  tapply(dev_10[, loss_col_name], dev_10$GRCODE, sum)
 }
-  # group actual losses with mack projections
-  mack_smry <- left_join(mack_smry, actual_paid, by = "GRCODE")
-  mack_smry <- mutate(mack_smry, actual_ibnr = actual_ultimate - latest)
-  mack_smry <- mack_smry[, -6]
+
+paid_actual_ultimate <- lapply(data_sets, actual_ultimate, loss_type = "paid")
+incurred_actual_ultimate <- lapply(data_sets, actual_ultimate, loss_type = "incurred")
+
+################### fIX CODE BELOW HERE ####################################################
+# group actual losses with mack projections
+combine_mack_actual <- function(mack, actual) {
+  mack_smry <- left_join(mack, actual, by = "GRCODE")
+  names(mack_smry)[length(mack_smry)] <- "actual_ultimate"
+  mutate(mack_smry, actual_ibnr = actual_ultimate - latest)
+}
+
+#full_mack_smry <- vector("list", length(paid_mack_smry))
+#for (i in seq_along(paid_mack_smry)) {
+#  full_mack_smry[[i]] <- 
+#}
+#paid_mack_smry <- mutate(paid_mack_smry, paid_actual_ibnr = actual_ultimate - latest)
+mack_smry
 ```
 
-### 3. Compare Mack Projections to Actual IBNR
 
-Let's see how many of the actual IBNR amounts fell within 1 and 2 Mack S.E. of the projection.
-
-```{r, echo = FALSE}
-# compare absolute value of Mack projection - actual ultimate to mack se
-out_one_se <- abs(mack_smry$ibnr - mack_smry$actual_ibnr) > 
-                  mack_smry$mack_se
-out_two_se <- abs(mack_smry$ibnr - mack_smry$actual_ibnr) > 
-                 (mack_smry$mack_se * 2)
-
-n <- nrow(mack_smry)
-
-one_se <- (n - sum(out_one_se)) / n 
-two_se <- (n - sum(out_two_se)) / n 
-```
-
-A quick review of the projections shows us that only `r round(one_se * 100, 1)`% of the actual insurence loss amounts were within one Mack S.E. of the projected ultimate loss amounts, and  `r round(two_se * 100, 1)`% were within two Mack S.E.
-
-Let's investigate if the Mack IBNR projection has a tendency of being higher or lower than the actual IBNR.
-
-```{r}
+```{r, eval = FALSE}
 # review of companies outside two mack se
 mack_smry$h_l <- (mack_smry$actual_ibnr - mack_smry$ibnr) / mack_smry$mack_se
   
