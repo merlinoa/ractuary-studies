@@ -71,7 +71,7 @@ for (i in seq_along(data_sets)) {
 
 Several steps are invloved in creating the desired visualizations from the cleaned data.  An example of each of these steps is outlined in \hyperref[appendix:a]{Appendix A}(Appendix A) for the Mack Method on paid workers' compensation losses. 
 
-```{r create_function, echo = FALSE}
+```{r create_triangles, echo = FALSE}
 # param lob the cleaned insurance loss data frame
 # param loss_type character "paid" or "incurred"
 triangles <- function(lob, loss_type) {
@@ -105,7 +105,7 @@ paid_triangles <- lapply(data_sets, triangles, loss_type = "paid")
 incurred_triangles <- lapply(data_sets, triangles, loss_type = "incurred")
 ```
 
-```{r mack_projections, warning = FALSE}
+```{r mack_projections, echo = FALSE, warning = FALSE}
 # function for mack
 # param lob_triangles object returned from above functions
 mack_f <- function(lob_triangle) {
@@ -129,7 +129,7 @@ paid_mack_smry <- lapply(paid_triangles, mack_f)
 incurred_mack_smry <- lapply(incurred_triangles, mack_f)
 ```
 
-```{r}
+```{r compare_mack_actual, echo = FALSE}
 
 actual_ultimate <- function(lob, loss_type) {
   # find actual losses at development period 10
@@ -147,34 +147,25 @@ actual_ultimate <- function(lob, loss_type) {
 paid_actual_ultimate <- lapply(data_sets, actual_ultimate, loss_type = "paid")
 incurred_actual_ultimate <- lapply(data_sets, actual_ultimate, loss_type = "incurred")
 
-################### fIX CODE BELOW HERE ####################################################
 # group actual losses with mack projections
-combine_mack_actual <- function(mack, actual) {
-  mack_smry <- left_join(mack, actual, by = "GRCODE")
+mack_and_actual <- function(mack, actual) {
+  mack_smry <- left_join(mack, actual, by = "GRCODE", copy = TRUE)
   names(mack_smry)[length(mack_smry)] <- "actual_ultimate"
-  mutate(mack_smry, actual_ibnr = actual_ultimate - latest)
+  mutate(mack_smry, 
+         actual_ibnr = actual_ultimate - latest,
+         z = (acrual_ibnr - ibnr) / mack_se)
 }
 
-#full_mack_smry <- vector("list", length(paid_mack_smry))
+#paid_mack_full <- vector("list", length(paid_mack_smry))
 #for (i in seq_along(paid_mack_smry)) {
-#  full_mack_smry[[i]] <- 
+#  paid_mack_full[[i]] <- mack_and_actual(paid_mack_smry[[i]], 
+#                                         paid_actual_ultimate[[i]])
 #}
-#paid_mack_smry <- mutate(paid_mack_smry, paid_actual_ibnr = actual_ultimate - latest)
-mack_smry
-```
 
-
-```{r, eval = FALSE}
-# review of companies outside two mack se
-mack_smry$h_l <- (mack_smry$actual_ibnr - mack_smry$ibnr) / mack_smry$mack_se
-  
-mack_smry
-}
-
+#paid_mack_full
 ```
 
 # Conclusions
-
 
 
 # Appendix A: Paid Workers' Compensation Mack Method
