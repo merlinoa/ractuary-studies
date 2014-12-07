@@ -35,6 +35,7 @@ For more information on the data see the [CAS webpage](http://www.casact.org/res
 library(ChainLadder) # install.packages("ChainLadder")
 library(dplyr) # for data manipulation
 library(reshape2) # data manipulation
+library(ggplot2)
 library(xtable)
 options(xtable.comment = FALSE)
 
@@ -141,7 +142,10 @@ actual_ultimate <- function(lob, loss_type) {
    }
   
   dev_10 <- lob[lob$DevelopmentLag == 10, ]
-  tapply(dev_10[, loss_col_name], dev_10$GRCODE, sum)
+  dev_10_sum <- as.data.frame(tapply(dev_10[, loss_col_name], dev_10$GRCODE,  sum))
+  dev_10_sum$GRCODE <- rownames(dev_10_sum)
+  names(dev_10_sum)[1] <- paste0(loss_type, "_ultimate")
+  dev_10_sum
 }
 
 paid_actual_ultimate <- lapply(data_sets, actual_ultimate, loss_type = "paid")
@@ -153,16 +157,22 @@ mack_and_actual <- function(mack, actual) {
   names(mack_smry)[length(mack_smry)] <- "actual_ultimate"
   mutate(mack_smry, 
          actual_ibnr = actual_ultimate - latest,
-         z = (acrual_ibnr - ibnr) / mack_se)
+         z = (actual_ibnr - ibnr) / mack_se)
 }
 
-#paid_mack_full <- vector("list", length(paid_mack_smry))
-#for (i in seq_along(paid_mack_smry)) {
-#  paid_mack_full[[i]] <- mack_and_actual(paid_mack_smry[[i]], 
-#                                         paid_actual_ultimate[[i]])
-#}
+paid_mack_full <- vector("list", length(paid_mack_smry))
+for (i in seq_along(paid_mack_smry)) {
+  paid_mack_full[[i]] <- mack_and_actual(paid_mack_smry[[i]], 
+                                         paid_actual_ultimate[[i]])
+}
 
-#paid_mack_full
+
+```
+
+```{r histogram, echo = FALSE}
+ggplot(paid_mack_full[[1]], aes(x = z)) +
+      geom_histogram(fill = "white", colour = "black") +
+      xlab("Standard Normal Spread Estimation")
 ```
 
 # Conclusions
@@ -277,9 +287,15 @@ A quick review of the projections shows us that only `r round(one_se * 100, 1)`%
 
 Let's investigate if the Mack IBNR projection has a tendency of being higher or lower than the actual IBNR.
 
-```{r}
+```{r, echo = FALSE, results = "asis"}
 # review of companies outside two mack se
-mack_smry$h_l <- (mack_smry$actual_ibnr - mack_smry$ibnr) / mack_smry$mack_se
+mack_smry$z <- (mack_smry$actual_ibnr - mack_smry$ibnr) / mack_smry$mack_se
   
-mack_smry
+mack_smry_f <- xtable(mack_smry, 
+                      digits = c(0, 0, 0, 0, 0, 0, 0, 2),
+                      align = "crrrrrrr",
+                      format.args = list(big.mark = ","))
+
+print(mack_smry_f, 
+      include.rownames = FALSE)
 ```
