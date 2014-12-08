@@ -49,30 +49,48 @@ small_cut <- 200 # for small loss amounts cut off size
 
 ### A little data cleaning
 
-A good portion of the companies in the data sets are missing loss information for a portion of the origin years (e.g for workers compensation 70 out of 132 do not have loss information for all origin years at all development periods).  In addition to companies with missing loss information we removed companies any cumulative with paid loss amounts less than `r small_cut`. To see all the code used to clean the data and all code used in the analysis see the [.Rmd file on github](https://raw.githubusercontent.com/merlinoa/ractuary-studies/master/chainladder-review.Rmd).
+A good portion of the companies in the data sets are missing loss information for a portion of the origin years (e.g. for workers compensation 70 out of the 132 companies do not have loss information for all origin years at all development periods).  In addition to companies with missing loss information we removed companies with any cumulative paid loss amounts less than `r small_cut`. To see all the code to create this report see the [.Rmd file on github](https://raw.githubusercontent.com/merlinoa/ractuary-studies/master/chainladder-review.Rmd).
 
 ```{r data_cleaning, echo = FALSE}
-# Combine data sets into a list 
-data_sets <- list(wkcomp, ppauto, prodliab, comauto, medmal, othliab)
+# Combine data sets into a list data frame
+wkcomp$lob <- "wkcomp"
+ppauto$lob <- "ppauto"
+prodliab$lob <- "prodliab"
+comauto$lob <- "comauto"
+medmal$lob <- "medmal"
+othliab$lob <- "othliab"
 
-# identify unique companies in each data set that have missing data
+names(ppauto) <- names(wkcomp)
+names(prodliab) <- names(wkcomp)
+names(comauto) <- names(wkcomp)
+names(medmal) <- names(wkcomp)
+names(othliab) <- names(wkcomp)
+
+data_sets <- rbind(wkcomp, ppauto, prodliab, comauto, medmal, othliab)
+data_sets$lob <- as.factor(data_sets$lob)
+
+# identify unique companies that have missing data.
 # I also had some trouble with companies that had very small losses, so I decided
 # to remove all companies with cumulative paid losses less than some value 
 # at any observation in the data set.
-id_missing_data <- lapply(data_sets, function(x) unique(x$GRCODE[x[, 7] <= small_cut]))
+# GRCODE is only unique by lob, so I need to create new column with combination of
+
+data_sets <- mutate(data_sets, id = paste0(lob, GRCODE))
+  
+id_missing_data <- unique(data_sets$id[data_sets[, "CumPaidLoss_D"] <= small_cut])
 
 # remove companies that have missing data
-for (i in seq_along(data_sets)) {
-  data_sets[[i]] <- data_sets[[i]][-which(data_sets[[i]]$GRCODE %in% 
-                                            id_missing_data[[i]]), ]
-}
+data_sets <- data_sets[-which(data_sets$id %in% id_missing_data), ]
 ```
 
 # Analysis
 
-Several steps are invloved in creating the desired visualizations from the cleaned data.  An example of each of these steps is outlined in \hyperref[appendix:a]{Appendix A}(Appendix A) for the Mack Method on paid workers' compensation losses. 
+The analysis is done in R and, as far as I can tell, should be 100% reproducible assuming you have the appropriate free software installed on your computer.  The analysis takes each of the companies in the 6 lines of businesss represented in the CAS data sets, and runs several `ChainLadder` reserve projection functions.  I then standard normalize the projections in relation to actual losses and plot the standard normals in histograms.  There are two histogram, one for the paid projection and one for the incurred projection, for each `ChainLadder` function covered in this document.  
 
-```{r create_triangles, echo = FALSE}
+Several steps are invloved in creating the desired visualizations from the cleaned data.  An example of each of these steps is outlined in \hyperref[appendix:a]{Appendix A} for the Mack Method on paid workers' compensation losses. 
+
+## The Plots
+```{r create_triangles, echo = FALSE, eval = FALSE}
 # param lob the cleaned insurance loss data frame
 # param loss_type character "paid" or "incurred"
 triangles <- function(lob, loss_type) {
@@ -100,14 +118,14 @@ triangles <- function(lob, loss_type) {
  tri
 }
 
-# use above functions to create paid and incurred triangles for all lines 
+# use above functions to create paid and incurred triangles for all lines
 # of business
 paid_triangles <- lapply(data_sets, triangles, loss_type = "paid")
 incurred_triangles <- lapply(data_sets, triangles, loss_type = "incurred")
 ```
 
-```{r mack_projections, echo = FALSE, warning = FALSE}
-# function for mack
+```{r mack_projections, echo = FALSE, warning = FALSE, eval = FALSE}
+# function for mack=================================================================
 # param lob_triangles object returned from above functions
 mack_f <- function(lob_triangle) {
   # run mack model as provided in ChainLadder package
@@ -122,7 +140,7 @@ mack_f <- function(lob_triangle) {
   mack_smry <- as.data.frame(t(as.data.frame(mack_smry)))
   rownames(mack_smry) <- NULL
   mack_smry <- data.frame(names(lob_triangle), mack_smry)
-  names(mack_smry) <- c("GRCODE", "latest", "ultimate", "ibnr", "mack_se")
+  names(mack_smry) <- c("GRCODE", "latest", "mack_ultimate", "mack_ibnr", "mack_se")
   mack_smry
 }
 
@@ -130,7 +148,7 @@ paid_mack_smry <- lapply(paid_triangles, mack_f)
 incurred_mack_smry <- lapply(incurred_triangles, mack_f)
 ```
 
-```{r compare_mack_actual, echo = FALSE}
+```{r compare_mack_actual, echo = FALSE, eval = FALSE}
 
 actual_ultimate <- function(lob, loss_type) {
   # find actual losses at development period 10
@@ -157,28 +175,41 @@ mack_and_actual <- function(mack, actual) {
   names(mack_smry)[length(mack_smry)] <- "actual_ultimate"
   mutate(mack_smry, 
          actual_ibnr = actual_ultimate - latest,
-         z = (actual_ibnr - ibnr) / mack_se)
+         z = (actual_ibnr - mack_ibnr) / mack_se)
 }
 
+# combine mack projections with actual
 paid_mack_full <- vector("list", length(paid_mack_smry))
 for (i in seq_along(paid_mack_smry)) {
   paid_mack_full[[i]] <- mack_and_actual(paid_mack_smry[[i]], 
                                          paid_actual_ultimate[[i]])
 }
 
+# combine mack projections with actuals
+incurred_mack_full <- vector("list", length(incurred_mack_smry))
+for (i in seq_along(incurred_mack_smry)) {
+  incurred_mack_full[[i]] <- mack_and_actual(incurred_mack_smry[[i]], 
+                                         incurred_actual_ultimate[[i]])
+}
 
 ```
 
-```{r histogram, echo = FALSE}
+```{r mack_histogram, echo = FALSE, warning = FALSE, message = FALSE, eval = FALSE}
 ggplot(paid_mack_full[[1]], aes(x = z)) +
-      geom_histogram(fill = "white", colour = "black") +
-      xlab("Standard Normal Spread Estimation")
+       geom_histogram(fill = "white", colour = "black") +
+       xlab("Standard Normal") +
+       ggtitle("MackChainLadder - Paid Projection")
+
+ggplot(incurred_mack_full[[1]], aes(x = z)) +
+       geom_histogram(fill = "white", colour = "black") +
+       xlab("Standard Normal") + 
+       ggtitle("MackChainLadder - Incurred Projection")
 ```
 
 # Conclusions
 
 
-# Appendix A: Paid Workers' Compensation Mack Method
+# Appendix A: Paid Workers' Compensation Mack Method - An Example
 
 \label{appendix:a}
 
@@ -188,7 +219,7 @@ First we need to make the triangles.  `triangle` is an S3 class from the `ChainL
 
 ```{r wc_paid_tri, echo = FALSE, results = "asis", echo = FALSE}
 # isolate workers' compensation data
-wkcomp_clean <- data_sets[[1]]
+wkcomp_clean <- data_sets[data_sets$lob == "wkcomp", ]
 
 # find unique GRCODEs for looping
 wkcomp_id <- unique(wkcomp_clean$GRCODE)
@@ -213,7 +244,7 @@ print(eg_paid_tri,
 
 ### 2. Run the Mack Method
 
-We can apply the `ChainLadder` function `MackChainLadder()` to each of our triangles.  The following table is what the Mack method looks like applied to the triangle above.
+We can apply the `ChainLadder` function `MackChainLadder()` to each of our triangles.  The following table is a summary of the `MackChainLadder()` function applied to the triangle above.
 
 ```{r wc_mack, warning = FALSE, results = "asis", echo = FALSE}
 # run mack model as provided in ChainLadder package
@@ -228,8 +259,7 @@ print(eg_wc_mack,
       format.args = list(big.mark = ","))
 ```
 
-
-Now for all the workers' compensation companies in our analysis.
+We are only interested in the `Totals` row for each company.  A summary of the totals for a few of the workers' compensation companies looks as follows.  Notice that the company we looked at in the above tables is in row 2 of the following table.
 
 ```{r wc_mack_smry, warning = FALSE, results = "asis", echo = FALSE}
 # select relevant value for comparison to actual loss values
@@ -241,7 +271,7 @@ for (i in seq_along(wc_mack)) {
 mack_smry <- as.data.frame(t(as.data.frame(mack_smry)))
 rownames(mack_smry) <- NULL
 mack_smry <- data.frame(wkcomp_id, mack_smry)
-names(mack_smry) <- c("GRCODE", "latest", "ultimate", "ibnr", "mack_se")
+names(mack_smry) <- c("GRCODE", "latest", "mack_ultimate", "mack_ibnr", "mack_se")
 
 # find actual losses at development period 10
 actual_paid <- filter(wkcomp_clean, DevelopmentLag == 10) %>%
@@ -253,28 +283,32 @@ mack_smry <- left_join(mack_smry, actual_paid, by = "GRCODE")
 mack_smry <- mutate(mack_smry, actual_ibnr = actual_ultimate - latest)
 mack_smry <- mack_smry[, -6]
 
+
+# calculate z value
+mack_smry$z <- (mack_smry$actual_ibnr - mack_smry$mack_ibnr) / mack_smry$mack_se
+
 # format data frame for printing
-mack_smry_f <- xtable(mack_smry, digits = 0, 
-                      align = "ccrrrrr",
-                      display = c("d", "s", "d", "d", "d", "d", "d"))
+mack_smry_f <- xtable(mack_smry, 
+                      digits = c(0, 0, 0, 0, 0, 0, 0, 2),
+                      align = "ccrrrrrr",
+                      display = c("d", "s", "d", "d", "d", "d", "d", "d"),
+                      format.args = list(big.mark = ","))
 
 # print data frame as LaTeX table
-print(mack_smry_f,
+print(mack_smry_f, 
+      include.rownames = FALSE,
       tabular.environment = 'longtable',
       floating = FALSE,
-      include.rownames = FALSE,
       format.args = list(big.mark = ","))
 ```
 
 ### 3. Compare Mack Projections to Actual IBNR
 
-Let's see how many of the actual IBNR amounts fell within 1 and 2 Mack S.E. of the projection.
-
 ```{r, echo = FALSE}
 # compare absolute value of Mack projection - actual ultimate to mack se
-out_one_se <- abs(mack_smry$ibnr - mack_smry$actual_ibnr) > 
+out_one_se <- abs(mack_smry$mack_ibnr - mack_smry$actual_ibnr) > 
                   mack_smry$mack_se
-out_two_se <- abs(mack_smry$ibnr - mack_smry$actual_ibnr) > 
+out_two_se <- abs(mack_smry$mack_ibnr - mack_smry$actual_ibnr) > 
                  (mack_smry$mack_se * 2)
 
 n <- nrow(mack_smry)
@@ -283,19 +317,4 @@ one_se <- (n - sum(out_one_se)) / n
 two_se <- (n - sum(out_two_se)) / n 
 ```
 
-A quick review of the projections shows us that only `r round(one_se * 100, 1)`% of the actual insurence loss amounts were within one Mack S.E. of the projected ultimate loss amounts, and  `r round(two_se * 100, 1)`% were within two Mack S.E.
-
-Let's investigate if the Mack IBNR projection has a tendency of being higher or lower than the actual IBNR.
-
-```{r, echo = FALSE, results = "asis"}
-# review of companies outside two mack se
-mack_smry$z <- (mack_smry$actual_ibnr - mack_smry$ibnr) / mack_smry$mack_se
-  
-mack_smry_f <- xtable(mack_smry, 
-                      digits = c(0, 0, 0, 0, 0, 0, 0, 2),
-                      align = "crrrrrrr",
-                      format.args = list(big.mark = ","))
-
-print(mack_smry_f, 
-      include.rownames = FALSE)
-```
+A quick review of the projections shows us that only `r round(one_se * 100, 1)`% of the actual insurance loss amounts were within one Mack S.E. of the projected ultimate loss amounts, and  `r round(two_se * 100, 1)`% were within two Mack S.E.
