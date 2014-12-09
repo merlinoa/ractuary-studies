@@ -12,7 +12,7 @@ geometry: margin=1in
 
 # Background
 
-The `ChainLadder` package includes methods for projecting insurance loss reserves.  For more information about the `ChainLadder` package please see the `ChainLadder` [package vignette](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf).  
+The `ChainLadder` package by Markus Gesmann, Dan, Murphy, and Wayne Zhang includes methods for projecting insurance loss reserves.  For more information about the `ChainLadder` package please see the `ChainLadder` [package vignette](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf).  
 
 # Purpose
 
@@ -44,12 +44,11 @@ library(casdata) # devtools::install_github("merlinoa/casdata")
 # package I created to transform ChainLadder classes into
 # data frames that can be easily printed to pdf
 library(exhibit) # devtools::install_github("merlinoa/exhibit")
-small_cut <- 200 # for small loss amounts cut off size
 ```
 
 ### A little data cleaning
 
-A good portion of the companies in the data sets are missing loss information for a portion of the origin years (e.g. for workers compensation 70 out of the 132 companies do not have loss information for all origin years at all development periods).  In addition to companies with missing loss information we removed companies with any cumulative paid loss amounts less than `r small_cut`. To see all the code to create this report see the [.Rmd file on github](https://raw.githubusercontent.com/merlinoa/ractuary-studies/master/chainladder-review.Rmd).
+A good portion of the companies in the data sets are missing losses for a portion of the origin years (e.g. for workers compensation 70 out of the 132 companies have a cumulative paid loss of zero at at least one origin year and development period).  In addition to companies with incomplete loss information we removed several companies with highly irregular loss development. To see all the code to create this report see the [.Rmd file on github](https://raw.githubusercontent.com/merlinoa/ractuary-studies/master/chainladder-review.Rmd).
 
 ```{r data_cleaning, echo = FALSE}
 # Combine data sets into a list data frame
@@ -75,9 +74,9 @@ df$lob <- as.factor(df$lob)
 # at any observation in the data set.
 # GRCODE is only unique by lob, so I need to create new column with combination of
 
-df <- mutate(df, id = paste0(lob, GRCODE))
+df <- mutate(df, id = paste(lob, GRCODE, sep = "_"))
   
-id_missing <- unique(df$id[df[, "CumPaidLoss_D"] <= small_cut])
+id_missing <- unique(df$id[df[, "CumPaidLoss_D"] <= 200])
 
 # remove companies that have missing data
 df <- df[-which(df$id %in% id_missing), ]
@@ -85,11 +84,10 @@ df <- df[-which(df$id %in% id_missing), ]
 
 # Analysis
 
-The analysis is done in R and, as far as I can tell, should be 100% reproducible assuming you have the appropriate free software installed on your computer.  The analysis takes each of the companies in the 6 lines of businesss represented in the CAS data sets, and runs several `ChainLadder` reserve projection functions.  I then standard normalize the projections in relation to actual losses and plot the standard normals in histograms.  There are two histogram, one for the paid projection and one for the incurred projection, for each `ChainLadder` function covered in this document.  
+The analysis is done in R and, as far as I can tell, should be 100% reproducible assuming you have the appropriate free software installed on your computer.  The analysis takes each of the companies in the 6 lines of businesss represented in the CAS data sets, and runs several `ChainLadder` reserve projection functions.  I then took the standard normal of the projections in relation to actual losses and plotted the standard normals in histograms.  There are two histograms, one for the paid projection and one for the incurred projection, for each `ChainLadder` function covered in this document.  
 
 Several steps are invloved in creating the desired visualizations from the cleaned data.  An example of each of these steps is outlined in \hyperref[appendix:a]{Appendix A} for the Mack Method on paid workers' compensation losses. 
 
-## The Plots
 ```{r create_triangles, echo = FALSE}
 # param data the cleaned insurance loss data frame
 # param loss_type character "CumPaidLoss_D" or "IncurLoss_D"
@@ -119,12 +117,16 @@ paid_triangles <- triangles(df ,loss_type = "CumPaidLoss_D")
 incurred_triangles <- triangles(df, loss_type = "IncurLoss_D")
 ```
 
+\pagebreak
+
+## The Mack Method
+
 ```{r mack_projections, echo = FALSE, warning = FALSE}
 # function for mack=================================================================
-# param lob_triangles object returned from above functions
+# param triangles list of all company triangles
 mack_f <- function(triangles) {
   # run mack model as provided in ChainLadder package
-  mack <- lapply(triangles, MackChainLadder, est.sigma = "Mack")
+  mack <- lapply(triangles, MackChainLadder) # est.sigma = "Mack"
   
   # extract the good stuff from the mack projection
   mack_smry <- vector("list", length(mack))
@@ -136,6 +138,7 @@ mack_f <- function(triangles) {
   rownames(mack_smry) <- NULL
   mack_smry <- data.frame(names(triangles), mack_smry)
   names(mack_smry) <- c("id", "latest", "mack_ultimate", "mack_ibnr", "mack_se")
+  mack_smry$lob <- gsub("_.*$", "", mack_smry$id)
   mack_smry
 }
 
@@ -174,22 +177,54 @@ paid_mack_full <- mack_and_actual(paid_mack_smry,
 # combine incurred mack projections with actuals
 incurred_mack_full <- mack_and_actual(incurred_mack_smry, 
                                       incurred_actual_ultimate)
+
 ```
 
-```{r mack_histogram, echo = FALSE, warning = FALSE, message = FALSE}
-ggplot(paid_mack_full, aes(x = z)) +
-       geom_histogram(fill = "white", colour = "black") +
+```{r mack_histogram, echo = FALSE, warning = FALSE, message = FALSE, fig.height = 4}
+ggplot(paid_mack_full, aes(x = z, fill = lob)) +
+       geom_histogram(colour = "black") +
        xlab("Standard Normal") +
-       ggtitle("MackChainLadder - Paid Projection")
+       ggtitle("MackChainLadder - Paid Projection") +
+       geom_bar()
 
-ggplot(incurred_mack_full, aes(x = z)) +
-       geom_histogram(fill = "white", colour = "black") +
+ggplot(incurred_mack_full, aes(x = z, fill = lob)) +
+       geom_histogram(colour = "black") +
        xlab("Standard Normal") + 
-       ggtitle("MackChainLadder - Incurred Projection")
+       ggtitle("MackChainLadder - Incurred Projection") +
+       geom_bar()
 ```
+
+# The Bootstrap Method
+
+```{r boot_projections, echo = FALSE, warning = FALSE}
+# function for boot=================================================================
+# param triangles list of all company triangles
+projection <- function(triangles, method) {
+  # run mack model as provided in ChainLadder package
+  projections <- lapply(triangles, method)
+  
+  # extract the good stuff from the boot projection
+  smry <- vector("list", length(projections))
+  for (i in seq_along(projections)) {
+    smry[[i]] <- summary(projections[[i]])[[2]]
+  }
+
+  smry <- as.data.frame(t(as.data.frame(smry)))
+  rownames(smry) <- NULL
+  smry <- data.frame(names(triangles), smry)
+  smry$lob <- gsub("_.*$", "", smry[, 1])
+  smry
+}
+
+paid_boot_smry <- projection(paid_triangles, method = "BootChainLadder")
+head(paid_boot_smry)
+```
+
+
 
 # Conclusions
 
+\pagebreak
 
 # Appendix A: Paid Workers' Compensation Mack Method - An Example
 
@@ -226,7 +261,7 @@ print(eg_paid_tri,
 
 ### 2. Run the Mack Method
 
-We can apply the `ChainLadder` function `MackChainLadder()` to each of our triangles.  The following table is a summary of the `MackChainLadder()` function applied to the triangle above.
+We can apply the `ChainLadder` function `MackChainLadder()` to each of our triangles.  The following table is a summary of the `MackChainLadder()` function applied to the company from the triangle above.
 
 ```{r wc_mack, warning = FALSE, results = "asis", echo = FALSE}
 # run mack model as provided in ChainLadder package
@@ -241,7 +276,9 @@ print(eg_wc_mack,
       format.args = list(big.mark = ","))
 ```
 
-We are only interested in the `Totals` row for each company.  A summary of the totals for a few of the workers' compensation companies looks as follows.  Notice that the company we looked at in the above tables is in row 2 of the following table.
+### 3. Compare Mack Projections to Actual Losses
+
+We are interested in the `Totals` row `mack_ibnr` and `mack_se` from the table above for each company.  A summary of the totals for a few of the workers' compensation companies looks as follows.  Notice that the company we looked at in the above tables is in row 2 of the following table.  We compare the Mack projections to the actual ultimate to get the `z` column in the table below.  The `z` column is the value plotted in the histograms.
 
 ```{r wc_mack_smry, warning = FALSE, results = "asis", echo = FALSE}
 # select relevant value for comparison to actual loss values
@@ -270,11 +307,10 @@ mack_smry <- mack_smry[, -6]
 mack_smry$z <- (mack_smry$actual_ibnr - mack_smry$mack_ibnr) / mack_smry$mack_se
 
 # format data frame for printing
-mack_smry_f <- xtable(mack_smry, 
-                      digits = c(0, 0, 0, 0, 0, 0, 0, 2),
-                      align = "ccrrrrrr",
-                      display = c("d", "s", "d", "d", "d", "d", "d", "d"),
-                      format.args = list(big.mark = ","))
+mack_smry_f <- xtable(mack_smry[1:10, c(1, 4:7)], 
+                      digits = c(0, 0, 0, 0, 0, 2),
+                      align = "ccrrrr",
+                      display = c("f","s", "f", "f", "f", "f"))
 
 # print data frame as LaTeX table
 print(mack_smry_f, 
@@ -283,20 +319,3 @@ print(mack_smry_f,
       floating = FALSE,
       format.args = list(big.mark = ","))
 ```
-
-### 3. Compare Mack Projections to Actual IBNR
-
-```{r, echo = FALSE}
-# compare absolute value of Mack projection - actual ultimate to mack se
-out_one_se <- abs(mack_smry$mack_ibnr - mack_smry$actual_ibnr) > 
-                  mack_smry$mack_se
-out_two_se <- abs(mack_smry$mack_ibnr - mack_smry$actual_ibnr) > 
-                 (mack_smry$mack_se * 2)
-
-n <- nrow(mack_smry)
-
-one_se <- (n - sum(out_one_se)) / n 
-two_se <- (n - sum(out_two_se)) / n 
-```
-
-A quick review of the projections shows us that only `r round(one_se * 100, 1)`% of the actual insurance loss amounts were within one Mack S.E. of the projected ultimate loss amounts, and  `r round(two_se * 100, 1)`% were within two Mack S.E.
