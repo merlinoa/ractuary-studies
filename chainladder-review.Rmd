@@ -154,12 +154,12 @@ actual_ultimate <- function(data, loss_type) {
   dev_10_sum
 }
 
-paid_actual_ultimate <- actual_ultimate(data_sets, loss_type = "CumPaidLoss_D")
-incurred_actual_ultimate <- actual_ulptimate(data_sets, loss_type = "IncurredLoss_D")
+paid_actual_ultimate <- actual_ultimate(df, loss_type = "CumPaidLoss_D")
+incurred_actual_ultimate <- actual_ultimate(df, loss_type = "IncurLoss_D")
 
 # group actual losses with mack projections
 mack_and_actual <- function(mack, actual) {
-  mack_smry <- left_join(mack, actual, by = "GRCODE", copy = TRUE)
+  mack_smry <- left_join(mack, actual, by = "id", copy = TRUE)
   names(mack_smry)[length(mack_smry)] <- "actual_ultimate"
   mutate(mack_smry, 
          actual_ibnr = actual_ultimate - latest,
@@ -168,12 +168,12 @@ mack_and_actual <- function(mack, actual) {
 
 # combine paid mack projections with actual
 paid_mack_full <- mack_and_actual(paid_mack_smry, 
-                                         paid_actual_ultimate)
+                                  paid_actual_ultimate)
 
 
 # combine incurred mack projections with actuals
 incurred_mack_full <- mack_and_actual(incurred_mack_smry, 
-                                         incurred_actual_ultimate)
+                                      incurred_actual_ultimate)
 ```
 
 ```{r mack_histogram, echo = FALSE, warning = FALSE, message = FALSE}
