@@ -66,8 +66,8 @@ names(comauto) <- names(wkcomp)
 names(medmal) <- names(wkcomp)
 names(othliab) <- names(wkcomp)
 
-data_sets <- rbind(wkcomp, ppauto, prodliab, comauto, medmal, othliab)
-data_sets$lob <- as.factor(data_sets$lob)
+df <- rbind(wkcomp, ppauto, prodliab, comauto, medmal, othliab)
+df$lob <- as.factor(df$lob)
 
 # identify unique companies that have missing data.
 # I also had some trouble with companies that had very small losses, so I decided
@@ -75,12 +75,12 @@ data_sets$lob <- as.factor(data_sets$lob)
 # at any observation in the data set.
 # GRCODE is only unique by lob, so I need to create new column with combination of
 
-data_sets <- mutate(data_sets, id = paste0(lob, GRCODE))
+df <- mutate(df, id = paste0(lob, GRCODE))
   
-id_missing_data <- unique(data_sets$id[data_sets[, "CumPaidLoss_D"] <= small_cut])
+id_missing <- unique(df$id[df[, "CumPaidLoss_D"] <= small_cut])
 
 # remove companies that have missing data
-data_sets <- data_sets[-which(data_sets$id %in% id_missing_data), ]
+df <- df[-which(df$id %in% id_missing), ]
 ```
 
 # Analysis
@@ -90,84 +90,72 @@ The analysis is done in R and, as far as I can tell, should be 100% reproducible
 Several steps are invloved in creating the desired visualizations from the cleaned data.  An example of each of these steps is outlined in \hyperref[appendix:a]{Appendix A} for the Mack Method on paid workers' compensation losses. 
 
 ## The Plots
-```{r create_triangles, echo = FALSE, eval = FALSE}
-# param lob the cleaned insurance loss data frame
-# param loss_type character "paid" or "incurred"
-triangles <- function(lob, loss_type) {
+```{r create_triangles, echo = FALSE}
+# param data the cleaned insurance loss data frame
+# param loss_type character "CumPaidLoss_D" or "IncurLoss_D"
+triangles <- function(data, loss_type) {
 
  # find unique GRCODEs for looping
- lob_id <- unique(lob$GRCODE)
-
- loss_col_name <- if (loss_type == "paid") {
-   names(lob)[7]
- } else {
-   names(lob)[6]
- }
+ unique_id <- unique(data$id)
  
  # create triangles for each company using `ChainLadder` package
- tri <- vector("list", length(lob_id))
- for (i in seq_along(lob_id)) {
-   tri[[i]] <- as.triangle(lob[lob$GRCODE == lob_id[i] & 
-                                      lob$AccidentYear + 
-                                      lob$DevelopmentLag < 1999, ], 
+ tri <- vector("list", length(unique_id))
+ for (i in seq_along(unique_id)) {
+   tri[[i]] <- as.triangle(data[data$id == unique_id[i] & 
+                                      data$AccidentYear + 
+                                      data$DevelopmentLag < 1999, ], 
                                origin = "AccidentYear", 
                                dev = "DevelopmentLag", 
-                               value = loss_col_name)
+                               value = loss_type)
  }
- names(tri) <- lob_id
+ # set name of each triangle to the id
+ names(tri) <- unique_id
  tri
 }
 
 # use above functions to create paid and incurred triangles for all lines
 # of business
-paid_triangles <- lapply(data_sets, triangles, loss_type = "paid")
-incurred_triangles <- lapply(data_sets, triangles, loss_type = "incurred")
+paid_triangles <- triangles(df ,loss_type = "CumPaidLoss_D")
+incurred_triangles <- triangles(df, loss_type = "IncurLoss_D")
 ```
 
-```{r mack_projections, echo = FALSE, warning = FALSE, eval = FALSE}
+```{r mack_projections, echo = FALSE, warning = FALSE}
 # function for mack=================================================================
 # param lob_triangles object returned from above functions
-mack_f <- function(lob_triangle) {
+mack_f <- function(triangles) {
   # run mack model as provided in ChainLadder package
-  lob_mack <- lapply(lob_triangle, MackChainLadder, est.sigma = "Mack")
+  mack <- lapply(triangles, MackChainLadder, est.sigma = "Mack")
   
   # extract the good stuff from the mack projection
-  mack_smry <- vector("list", length(lob_mack))
-  for (i in seq_along(lob_mack)) {
-    mack_smry[[i]] <- summary(lob_mack[[i]])[[2]]$Totals[c(1, 3:5)]
+  mack_smry <- vector("list", length(mack))
+  for (i in seq_along(mack)) {
+    mack_smry[[i]] <- summary(mack[[i]])[[2]]$Totals[c(1, 3:5)]
   }
 
   mack_smry <- as.data.frame(t(as.data.frame(mack_smry)))
   rownames(mack_smry) <- NULL
-  mack_smry <- data.frame(names(lob_triangle), mack_smry)
-  names(mack_smry) <- c("GRCODE", "latest", "mack_ultimate", "mack_ibnr", "mack_se")
+  mack_smry <- data.frame(names(triangles), mack_smry)
+  names(mack_smry) <- c("id", "latest", "mack_ultimate", "mack_ibnr", "mack_se")
   mack_smry
 }
 
-paid_mack_smry <- lapply(paid_triangles, mack_f)
-incurred_mack_smry <- lapply(incurred_triangles, mack_f)
+paid_mack_smry <- mack_f(paid_triangles)
+incurred_mack_smry <- mack_f(incurred_triangles)
 ```
 
-```{r compare_mack_actual, echo = FALSE, eval = FALSE}
+```{r compare_mack_actual, echo = FALSE}
 
-actual_ultimate <- function(lob, loss_type) {
+actual_ultimate <- function(data, loss_type) {
   # find actual losses at development period 10
-  # make individual function for this
-  loss_col_name <- if (loss_type == "paid") {
-     names(lob)[7]
-   } else {
-     names(lob)[6]
-   }
-  
-  dev_10 <- lob[lob$DevelopmentLag == 10, ]
-  dev_10_sum <- as.data.frame(tapply(dev_10[, loss_col_name], dev_10$GRCODE,  sum))
-  dev_10_sum$GRCODE <- rownames(dev_10_sum)
+  dev_10 <- data[data$DevelopmentLag == 10, ]
+  dev_10_sum <- as.data.frame(tapply(dev_10[, loss_type], dev_10$id,  sum))
+  dev_10_sum$id <- rownames(dev_10_sum)
   names(dev_10_sum)[1] <- paste0(loss_type, "_ultimate")
   dev_10_sum
 }
 
-paid_actual_ultimate <- lapply(data_sets, actual_ultimate, loss_type = "paid")
-incurred_actual_ultimate <- lapply(data_sets, actual_ultimate, loss_type = "incurred")
+paid_actual_ultimate <- actual_ultimate(data_sets, loss_type = "CumPaidLoss_D")
+incurred_actual_ultimate <- actual_ulptimate(data_sets, loss_type = "IncurredLoss_D")
 
 # group actual losses with mack projections
 mack_and_actual <- function(mack, actual) {
@@ -178,29 +166,23 @@ mack_and_actual <- function(mack, actual) {
          z = (actual_ibnr - mack_ibnr) / mack_se)
 }
 
-# combine mack projections with actual
-paid_mack_full <- vector("list", length(paid_mack_smry))
-for (i in seq_along(paid_mack_smry)) {
-  paid_mack_full[[i]] <- mack_and_actual(paid_mack_smry[[i]], 
-                                         paid_actual_ultimate[[i]])
-}
+# combine paid mack projections with actual
+paid_mack_full <- mack_and_actual(paid_mack_smry, 
+                                         paid_actual_ultimate)
 
-# combine mack projections with actuals
-incurred_mack_full <- vector("list", length(incurred_mack_smry))
-for (i in seq_along(incurred_mack_smry)) {
-  incurred_mack_full[[i]] <- mack_and_actual(incurred_mack_smry[[i]], 
-                                         incurred_actual_ultimate[[i]])
-}
 
+# combine incurred mack projections with actuals
+incurred_mack_full <- mack_and_actual(incurred_mack_smry, 
+                                         incurred_actual_ultimate)
 ```
 
-```{r mack_histogram, echo = FALSE, warning = FALSE, message = FALSE, eval = FALSE}
-ggplot(paid_mack_full[[1]], aes(x = z)) +
+```{r mack_histogram, echo = FALSE, warning = FALSE, message = FALSE}
+ggplot(paid_mack_full, aes(x = z)) +
        geom_histogram(fill = "white", colour = "black") +
        xlab("Standard Normal") +
        ggtitle("MackChainLadder - Paid Projection")
 
-ggplot(incurred_mack_full[[1]], aes(x = z)) +
+ggplot(incurred_mack_full, aes(x = z)) +
        geom_histogram(fill = "white", colour = "black") +
        xlab("Standard Normal") + 
        ggtitle("MackChainLadder - Incurred Projection")
@@ -217,9 +199,9 @@ ggplot(incurred_mack_full[[1]], aes(x = z)) +
 
 First we need to make the triangles.  `triangle` is an S3 class from the `ChainLadder` package that we can create using the `as.triangle()` function.  The following is a triangle from one of the workers' compensation companies chosen at random.
 
-```{r wc_paid_tri, echo = FALSE, results = "asis", echo = FALSE}
+```{r wc_paid_tri, echo = FALSE, results = "asis"}
 # isolate workers' compensation data
-wkcomp_clean <- data_sets[data_sets$lob == "wkcomp", ]
+wkcomp_clean <- df[df$lob == "wkcomp", ]
 
 # find unique GRCODEs for looping
 wkcomp_id <- unique(wkcomp_clean$GRCODE)
