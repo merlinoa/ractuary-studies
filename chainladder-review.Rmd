@@ -1,13 +1,13 @@
 ---
 title: "ChainLadder Package in Action"
 author: "Andy Merlino"
-date: "Wednesday, December 3, 2014"
+date: "Friday, December 12, 2014"
 output: 
     pdf_document:
         includes:
             in_header: mystyles.sty
 fontsize: 12pt
-geometry: margin=1in
+geometry: margin=1.25in
 ---
 
 # Background
@@ -49,7 +49,7 @@ paid_cutoff <- 200
 
 ### A little data cleaning
 
-A good portion of the companies in the data sets are missing losses for a portion of the origin years (e.g. for workers compensation 70 out of the 132 companies have a cumulative paid loss of zero for at least one origin year and development period).  In addition to companies with incomplete loss information we removed companies with cumulative paid losses of less than `r paid_cutoff` at any time because many of them were causing errors with the `ChainLadder` projection functions.  To see all the code to create this report see the [.Rmd file on github](https://raw.githubusercontent.com/merlinoa/ractuary-studies/master/chainladder-review.Rmd).
+A good portion of the companies in the data sets are missing losses for a portion of the origin years (e.g. for workers compensation 70 out of the 132 companies have a cumulative paid loss of zero for at least one origin year and development period).  In addition to companies with incomplete loss information we removed companies with cumulative paid losses of less than `r paid_cutoff` at any time because many of these companies were causing errors with the `ChainLadder` projection functions.  To see all the code used to create this report see the [.Rmd file on github](https://raw.githubusercontent.com/merlinoa/ractuary-studies/master/chainladder-review.Rmd).
 
 ```{r data_cleaning, echo = FALSE}
 # Combine data sets into a list data frame
@@ -87,7 +87,7 @@ df <- df[-which(df$id %in% id_missing), ]
 
 The analysis is done in R and, as far as I can tell, should be 100% reproducible assuming you have the appropriate free software installed on your computer.  The analysis takes each of the companies in the 6 lines of businesss represented in the CAS data sets, and runs several `ChainLadder` reserve projection functions.  It then calculates the standard normal of the projections in relation to actual losses and plots the standard normals in histograms.  There are two histograms, one for the paid projection and one for the incurred projection, for each `ChainLadder` function covered in this document.  
 
-Several steps are invloved in creating the desired visualizations from the cleaned data.  An example of each of these steps is outlined in \hyperref[appendix:a]{Appendix A} for the Mack Method on paid workers' compensation losses. 
+Several steps are invloved in creating the desired visualizations from the cleaned data.  An example of each of these steps for the Mack Method on paid workers' compensation losses is outlined in \hyperref[appendix:a]{Appendix A}. 
 
 ```{r create_triangles, echo = FALSE}
 # param data the cleaned insurance loss data frame
@@ -118,15 +118,11 @@ paid_triangles <- triangles(df ,loss_type = "CumPaidLoss_D")
 incurred_triangles <- triangles(df, loss_type = "IncurLoss_D")
 ```
 
-\pagebreak
-
-## The Mack Method
-
 ```{r projections_functions, echo = FALSE, warning = FALSE}
 # function for mack and boot projections============================================
 # param triangles list of all company triangles
 projection <- function(triangles, method) {
-  # run mack model as provided in ChainLadder package
+  # run mack model as provided in ChainLadder package 
   projections <- lapply(triangles, method)
   
   # extract the good stuff from the boot projection
@@ -143,8 +139,7 @@ projection <- function(triangles, method) {
 }
 ```
 
-```{r compare_mack_actual, echo = FALSE}
-
+```{r projection_actual_join, echo = FALSE}
 actual_ultimate <- function(data, loss_type) {
   # find actual losses at development period 10
   dev_10 <- data[data$DevelopmentLag == 10, ]
@@ -168,6 +163,12 @@ projection_actual_join <- function(projection_smry, actual) {
   smry
 }
 ```
+
+\pagebreak
+
+## The Mack Method
+
+The Mack Method provides a distribution free calculation of the standard error for the standard chain ladder IBNR projection.
 
 ```{r mack, echo = FALSE, warning = FALSE, message = FALSE, fig.height = 4}
 # calculate mack projections and grab summary
@@ -203,6 +204,8 @@ ggplot(incurred_mack_full, aes(x = z, fill = lob)) +
 
 # The Bootstrap Method
 
+Uses bootstap resampling to determine the standard error.
+
 ```{r boot_projections, echo = FALSE, warning = FALSE, message = FALSE, fig.height = 4}
 # caculate and return summary info for bootstrap method
 paid_boot_smry <- projection(paid_triangles, method = "BootChainLadder")[, c(1, 2:5, 8)]
@@ -234,6 +237,62 @@ ggplot(incurred_boot_full, aes(x = z, fill = lob)) +
 ```
 
 WOW! The `BootChainLadder()` function on incurred data performs really really well!
+
+# Munich Chain Ladder Method
+
+The Munich Method uses the ratio of paid to incurred to adjust the paid and incurred chain ladder estimates.
+
+The Munich projection for 10 of the companies does not work, and throws an error.  Many of the other companies get very poor or infinite estimates.  Not sure what the problem is yet...
+
+```{r munich_projections, echo = FALSE, warning = FALSE, message = FALSE, fig.height = 4}
+# munich projection not working for the following triangles.
+# removing these triangle for munich projections computation
+paid_triangles_munich <- paid_triangles[-c(49, 72, 76, 88, 89, 90, 96, 101, 107, 153)]
+incurred_triangles_munich <- incurred_triangles[-c(49, 72, 76, 88, 89, 90, 96, 101, 107, 153)]
+
+# caculate and return summary info for bootstrap method
+munich_projections <- vector("list", length(paid_triangles_munich))
+for (i in seq_along(paid_triangles_munich)) {
+  munich_projections[[i]] <- MunichChainLadder(Paid = paid_triangles_munich[[i]], 
+                                               Incurred = incurred_triangles_munich[[i]])
+}
+
+paid_munich_smry <- vector("list", length(munich_projections))
+for (i in seq_along(paid_munich_smry)) {
+  latest <- summary(munich_projections[[i]])[[2]][1, 1]
+  ultimate <- summary(munich_projections[[i]])[[2]][2, 1]
+  se <- munich_projections[[i]][[6]][[2]][[5]]
+  paid_munich_smry[[i]] <- c("id" = names(paid_triangles_munich)[i],
+                             latest, ultimate, 
+                             "ibnr" = ultimate - latest,
+                             se)
+}
+
+paid_munich_smry <- as.data.frame(t(as.data.frame(paid_munich_smry)))
+paid_munich_smry$lob <- gsub("_.*$", "", paid_munich_smry[, 1])
+rownames(paid_munich_smry) <- NULL
+
+#incurred_munich_smry <- vactor("list", length(munich_projections))
+#for (i in seq_along(munich_smry)) {
+#  latest <- munich_projections[[i]][[1]][[2]][1, 2]
+#  ultimate <- munich_projections[[i]][[1]][[2]][2, 2]
+#  se <- munich_projections[[i]][[7]][[2]][[5]]
+#  incurred_munich_smry[[i]] <- c(latest, ultimate, se)
+#}
+  
+
+names(paid_munich_smry) <- c("id", "latest", "ultimate", "ibnr", "se", "lob")
+
+# combine paid munich projections with actual
+factor2numeric <- function(x) as.numeric(as.character(x))
+paid_munich_smry[, 2:5] <- apply(paid_munich_smry[, 2:5], 2, factor2numeric)
+paid_munich_full <- projection_actual_join(paid_munich_smry, paid_actual_ultimate)
+
+
+# plot paid munich z values
+ggplot(paid_munich_full[paid_munich_full$z > -100 & paid_munich_full$z < 100, ], aes(x = z, fill = lob)) +
+       geom_histogram(colour = "black")
+```
 
 # Conclusions
 
