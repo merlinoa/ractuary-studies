@@ -173,7 +173,7 @@ projection_actual_join <- function(projection_smry, actual) {
 
 The Mack Method provides a distribution free calculation of the standard error for the standard chain ladder IBNR projection.
 
-```{r mack, echo = FALSE, warning = FALSE, message = FALSE, fig.height = 4, eval = FALSE}
+```{r mack, echo = FALSE, warning = FALSE, message = FALSE, fig.height = 4}
 # calculate mack projections and grab summary
 paid_mack_smry <- projection(paid_triangles, 
                              method = "MackChainLadder")[, c(1, 2, 4, 5, 6, 8)]
@@ -209,7 +209,7 @@ ggplot(incurred_mack_full, aes(x = z, fill = lob)) +
 
 Uses bootstap resampling to determine the standard error.
 
-```{r boot_projections, echo = FALSE, warning = FALSE, message = FALSE, fig.height = 4, eval = FALSE}
+```{r boot_projections, echo = FALSE, warning = FALSE, message = FALSE, fig.height = 4}
 # caculate and return summary info for bootstrap method
 paid_boot_smry <- projection(paid_triangles, method = "BootChainLadder")[, c(1, 2:5, 8)]
 names(paid_boot_smry) <- c("id", "latest", "ultimate", "ibnr", "se", "lob")
