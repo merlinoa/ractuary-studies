@@ -1,11 +1,8 @@
 ---
 title: "Mack and Boot ChainLadder Projections in Action"
 author: "Andy Merlino"
-date: "Wednesday, December 17, 2014"
-output: 
-    pdf_document:
-        includes:
-            in_header: mystyles.sty
+date: "2015-02-23"
+output: html_document
 fontsize: 12pt
 geometry: margin=1.25in
 ---
@@ -16,7 +13,7 @@ To measure the accuracy of the Mack and Boot reserving methods available in the 
 
 # ChainLadder Package
 
-The `ChainLadder` package by Markus Gesmann, Dan Murphy, and Wayne Zhang includes methods for projecting insurance loss reserves.  The Mack and Boot reserve projections are calculated by the `ChainLadder` functions, `MackChainLadder` and `BootChainLadder`.  For more information about the `ChainLadder` package please see the `ChainLadder` [package vignette](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf).  
+The `ChainLadder` package by Markus Gesmann, Dan Murphy, and Wayne Zhang includes methods for projecting insurance loss reserves.  The Mack and Boot reserve projections are calculated by the `ChainLadder` functions, `MackChainLadder()` and `BootChainLadder()`.  For more information about the `ChainLadder` package please see the `ChainLadder` [package vignette](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf).  
 
 # Data
 
@@ -38,6 +35,7 @@ library(reshape2) # data manipulation
 library(ggplot2) # graphics
 library(xtable) # tables
 options(xtable.comment = FALSE)
+options(xtable.type = "html")
 
 # package I created to store CAS data
 library(casdata) # devtools::install_github("merlinoa/casdata")
@@ -51,38 +49,21 @@ A good portion of the companies in the data sets are missing losses for a portio
 The following table breaks down of the number of companies included in this study by line of business.
 
 ```{r data_cleaning, echo = FALSE, results = "asis"}
-# Combine data sets into a list data frame
-wkcomp$lob <- "wkcomp"
-ppauto$lob <- "ppauto"
-prodliab$lob <- "prodliab"
-comauto$lob <- "comauto"
-medmal$lob <- "medmal"
-othliab$lob <- "othliab"
-
-names(ppauto) <- names(wkcomp)
-names(prodliab) <- names(wkcomp)
-names(comauto) <- names(wkcomp)
-names(medmal) <- names(wkcomp)
-names(othliab) <- names(wkcomp)
-
-df <- rbind(wkcomp, ppauto, prodliab, comauto, medmal, othliab)
-df$lob <- as.factor(df$lob)
-
 # identify unique companies that have missing data.
 # I also had some trouble with companies that had very small losses, so I decided
 # to remove all companies with cumulative paid losses less than some value 
 # at any observation in the data set.
 # GRCODE is only unique by lob, so I need to create new column with combination of
 
-df <- mutate(df, id = paste(lob, GRCODE, sep = "_"))
+df <- mutate(losses, id = paste(lob, gr_code, sep = "_"))
   
-id_missing <- unique(df$id[df[, "CumPaidLoss_D"] <= paid_cutoff])
+id_missing <- unique(df$id[df[, "paid"] <= paid_cutoff])
 
 # remove companies that have missing data
 df <- df[-which(df$id %in% id_missing), ]
 
 df_out <- group_by(df, lob) %>%
-  summarise(companies = length(unique(GRCODE)))
+  summarise(companies = length(unique(gr_code)))
 
 names(df_out) <- c("LOB", "No. of Companies")
 
@@ -94,7 +75,7 @@ print(df_out,
 
 # Analysis
 
-The analysis is done in R and, as far as I can tell, should be 100% reproducible assuming you have the appropriate free software installed on your computer.  The analysis takes each of the companies in the 6 lines of businesss represented in the CAS data sets, and runs the `MackChainLadder` and `BootChainLadder` reserve projection functions.  It then calculates the standard normal of the projections in relation to actual losses and plots the standard normals in histograms.  There are two histograms, one for the paid projection and one for the incurred projection, for each of the functions.  
+The analysis runs the `MackChainLadder` and `BootChainLadder` reserve projection functions on each company.  We then identify what the true reserve should have been by looking at losses as of 2006 Next we subtract the projected reserve amount from the true reserve and divide that by the standard error estimated from each reserving function.  There are two histograms, one for the paid projection and one for the incurred projection, for each of the functions.  
 
 Several steps are invloved in creating the desired visualizations from the cleaned data.  A simplified example of each of these steps for the Mack Method on paid workers' compensation losses is outlined in \hyperref[appendix:a]{Appendix A}. 
 
@@ -111,10 +92,10 @@ triangles <- function(data, loss_type) {
  tri <- vector("list", length(unique_id))
  for (i in seq_along(unique_id)) {
    tri[[i]] <- as.triangle(data[data$id == unique_id[i] & 
-                                      data$AccidentYear + 
-                                      data$DevelopmentLag < 1999, ], 
-                               origin = "AccidentYear", 
-                               dev = "DevelopmentLag", 
+                                      data$origin + 
+                                      data$dev < 1999, ], 
+                               origin = "origin", 
+                               dev = "dev", 
                                value = loss_type)
  }
  # set name of each triangle to the id
@@ -124,8 +105,8 @@ triangles <- function(data, loss_type) {
 
 # use above functions to create paid and incurred triangles for all lines
 # of business
-paid_triangles <- triangles(df ,loss_type = "CumPaidLoss_D")
-incurred_triangles <- triangles(df, loss_type = "IncurLoss_D")
+paid_triangles <- triangles(df ,loss_type = "paid")
+incurred_triangles <- triangles(df, loss_type = "incurred")
 ```
 
 ```{r projections_functions, echo = FALSE, warning = FALSE}
@@ -157,7 +138,7 @@ projection <- function(triangles, method) {
 # param loss_type character "CumPaidLoss_D" or "IncurLoss_D"
 actual_ultimate <- function(data, loss_type) {
   # find actual losses at development period 10
-  dev_10 <- data[data$DevelopmentLag == 10, ]
+  dev_10 <- data[data$dev == 10, ]
   dev_10_sum <- as.data.frame(tapply(dev_10[, loss_type], dev_10$id,  sum))
   dev_10_sum$id <- rownames(dev_10_sum)
   names(dev_10_sum)[1] <- paste0(loss_type, "_ultimate")
@@ -165,8 +146,8 @@ actual_ultimate <- function(data, loss_type) {
 }
 
 # run function to find actual ultimates for all companies
-paid_actual_ultimate <- actual_ultimate(df, loss_type = "CumPaidLoss_D")
-incurred_actual_ultimate <- actual_ultimate(df, loss_type = "IncurLoss_D")
+paid_actual_ultimate <- actual_ultimate(df, loss_type = "paid")
+incurred_actual_ultimate <- actual_ultimate(df, loss_type = "incurred")
 
 # group actual losses with mack projections
 projection_actual_join <- function(projection_smry, actual) {
@@ -278,14 +259,14 @@ library(exhibit) # devtools::install_github("merlinoa/exhibit")
 grcode <- 337
 
 # isolate one workers' compensation company
-wc337 <- df[df$lob == "wkcomp" & df$GRCODE == grcode, ]
+wc337 <- df[df$lob == "wkcomp" & df$gr_code == grcode, ]
 
 # create triangles for each company using `ChainLadder` package
-wc337_paid_tri <- as.triangle(wc337[wc337$AccidentYear + 
-                                    wc337$DevelopmentLag < 1999, ], 
-                               origin = "AccidentYear", 
-                               dev = "DevelopmentLag", 
-                               value = "CumPaidLoss_D")
+wc337_paid_tri <- as.triangle(wc337[wc337$origin + 
+                                    wc337$dev < 1999, ], 
+                               origin = "origin", 
+                               dev = "dev", 
+                               value = "paid")
 
 # prepare triangle for printing
 wc337_paid_tri_out <- xtable(exhibit(wc337_paid_tri),
@@ -326,9 +307,9 @@ wc337_mack_smry <- data.frame(grcode, wc337_mack_smry)
 names(wc337_mack_smry) <- c("GRCODE", "latest", "mack_ultimate", "mack_ibnr", "mack_se")
 
 # find actual losses at development period 10
-actual_paid <- filter(wc337, DevelopmentLag == 10) %>%
-  group_by(GRCODE) %>%
-  summarise(actual_paid = sum(CumPaidLoss_D))
+actual_paid <- filter(wc337, dev == 10) %>%
+  group_by(gr_code) %>%
+  summarise(actual_paid = sum(paid))
 actual_paid <- actual_paid$actual_paid
 
 # group actual losses with mack projections
