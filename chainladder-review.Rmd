@@ -9,7 +9,7 @@ geometry: margin=1.25in
 
 # Purpose
 
-To measure the accuracy of the Mack and Boot reserving methods available in the `ChainLadder` package by comparing the projections to actual insurance loss data.
+Measure the accuracy of the `ChainLadder::MackChainLadder()` and `ChainLadder::BootChainLadder()` reserve projection functions by comparing the projected reserves to actual insurance losses.
 
 # ChainLadder Package
 
@@ -17,7 +17,7 @@ The `ChainLadder` package by Markus Gesmann, Dan Murphy, and Wayne Zhang include
 
 # Data
 
-The CAS website provides historic U.S. insurance loss data accross 6 different lines of business and many different companies.  The data includes all losses necessary to fill out a 10 by 10 matrix of losses grouped by origin year rows and development year columns for origin years 1988 through 1997.  We will use data from origin years 1988 through 1997 evaluated as of 1997 (i.e. the upper left triangle of losses) to run the `ChainLadder` projections.  The data will be projected out to the 10th development year and compared to actual loss data as of development year 10.  The CAS data sets include triangles as of 1997 and actual losses up to 2006, so we can compare the `ChainLadder` projections (calculated from data evaluated on data as of 1997) to actual losses after 10 development periods.  The CAS data sets include data from the following lines of business:
+The CAS website provides historic U.S. insurance loss data accross 6 different lines of business and many different companies.  I used the data from origin years 1988 through 1997 evaluated as of 1997 (i.e. the upper left triangle of losses) to run the `ChainLadder` projections.  The CAS data sets includes actual losses developed for 10 years for all the provided origin years.  The CAS data sets include data from the following lines of business:
 
 * Workers' Compensation
 * Private Passenger Auto
@@ -44,9 +44,9 @@ paid_cutoff <- 200
 
 ### A little data cleaning
 
-A good portion of the companies in the data sets are missing losses for a portion of the origin years (e.g. for workers compensation 70 out of the 132 companies have a cumulative paid loss of zero for at least one origin year and development year).  In addition to companies with incomplete loss information I removed companies with cumulative paid losses of less than `r paid_cutoff` at any time because several of these companies were causing errors with the `ChainLadder` projection functions.  To see all the code used to create this report see the [.Rmd file on github](https://raw.githubusercontent.com/merlinoa/ractuary-studies/master/chainladder-review.Rmd).
+Several companies were removed from the analysis for various reasons.  The most common reason I removed a company from the analysis was that it had incomplete loss information.  To see all the code used to clean the data see the [.Rmd file on github](https://raw.githubusercontent.com/merlinoa/ractuary-studies/master/chainladder-review.Rmd).
 
-The following table breaks down of the number of companies included in this study by line of business.
+The following table breaks down the number of companies included in this study by line of business.
 
 ```{r data_cleaning, echo = FALSE, results = "asis"}
 # identify unique companies that have missing data.
@@ -65,7 +65,7 @@ df <- df[-which(df$id %in% id_missing), ]
 df_out <- group_by(df, lob) %>%
   summarise(companies = length(unique(gr_code)))
 
-names(df_out) <- c("LOB", "No. of Companies")
+names(df_out) <- c("LOB", "Num of Companies")
 
 df_out <- xtable(as.data.frame(df_out))
 
@@ -75,9 +75,9 @@ print(df_out,
 
 # Analysis
 
-The analysis runs the `MackChainLadder` and `BootChainLadder` reserve projection functions on each company.  We then identify what the true reserve should have been by looking at losses as of 2006 Next we subtract the projected reserve amount from the true reserve and divide that by the standard error estimated from each reserving function.  There are two histograms, one for the paid projection and one for the incurred projection, for each of the functions.  
+The analysis runs the `MackChainLadder` and `BootChainLadder` reserve projection functions on each company.  We then identify what the true reserve should have been and we subtract the projected reserve amount from the true reserve and then divide that by the standard error estimated by each reserving function.
 
-Several steps are invloved in creating the desired visualizations from the cleaned data.  A simplified example of each of these steps for the Mack Method on paid workers' compensation losses is outlined in \hyperref[appendix:a]{Appendix A}. 
+Several steps are invloved in creating the desired visualizations from the cleaned data.  A simplified example of each of these steps for the Mack Method on paid workers' compensation losses is outlined in \hyperref[appendix:a]{Appendix A}.
 
 ```{r create_triangles, echo = FALSE}
 # function: to create triangles for each company
@@ -232,7 +232,7 @@ ggplot(incurred_boot_full, aes(x = z, fill = lob)) +
        geom_bar()
 ```
 
-WOW! The `BootChainLadder()` function on incurred projection performs better than projections normally distributed around the actual losses!? ... could that be right?
+The `BootChainLadder()` function on incurred projection performs better than projections normally distributed around the actual losses!? ... could that be right?
 
 # Take Aways
 
