@@ -1,5 +1,5 @@
 ---
-title: "Mack and Boot ChainLadder Projections in Action"
+title: "ChainLadder Package: Mack and Boot Projections"
 author: "Andy Merlino"
 date: "2015-02-23"
 output: html_document
@@ -14,11 +14,11 @@ Measure the accuracy of the `ChainLadder::MackChainLadder()` and `ChainLadder::B
 
 # ChainLadder Package
 
-The `ChainLadder` package by Markus Gesmann, Dan Murphy, and Wayne Zhang includes methods for projecting insurance loss reserves.  The Mack and Boot reserve projections are calculated by the `ChainLadder` functions, `MackChainLadder()` and `BootChainLadder()`.  `MackChainLadder()` provides a distribution free calculation of the standard error for the standard chain ladder IBNR projection.  `BootChainLadder()` uses bootstap resampling to determine the standard error.  For more information please see the `ChainLadder` [package vignette](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf).  
+The `ChainLadder` package by Markus Gesmann, Dan Murphy, and Wayne Zhang includes methods for projecting insurance loss reserves.  The Mack and Boot reserve projections are calculated by the `ChainLadder` functions, `MackChainLadder()` and `BootChainLadder()`.  `MackChainLadder()` provides a distribution free calculation of the standard error for the standard chain ladder reserve projection.  `BootChainLadder()` uses bootstap resampling to determine the standard error of the reserve projection.  For more information please see the `ChainLadder` [package vignette](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf).  
 
 # Data
 
-The CAS website provides historic U.S. insurance loss data accross 6 different lines of business and many different companies.  I used the data from origin years 1988 through 1997 evaluated as of 1997 (i.e. the upper left triangle of losses) to run the `ChainLadder` projections.  The CAS data sets include actual losses developed for 10 years for all the provided origin years.  The CAS data sets include data from the following lines of business:
+The CAS website provides historic U.S. insurance loss data across 6 different lines of business and many different companies.  Data from origin years 1988 through 1997 evaluated as of 1997 (i.e. the upper left triangle of losses) is used to run the `ChainLadder` projections.  The CAS data sets include actual losses developed for 10 years for all the provided origin years.  The CAS data sets include data from the following lines of business:
 
 * Workers' Compensation
 * Private Passenger Auto
@@ -67,6 +67,9 @@ df_out <- group_by(df, lob) %>%
   summarise(companies = length(unique(gr_code)))
 
 names(df_out) <- c("LOB", "Num of Companies")
+df_out$LOB <- c("Commercial Auto", "Medical Malpractice",
+                "Other Liabiltiy", "Private Passenger",
+                "Product Liability", "Workers Compensation")
 
 df_out <- xtable(as.data.frame(df_out))
 
@@ -76,7 +79,7 @@ print(df_out,
 
 # Analysis
 
-The analysis runs the `MackChainLadder` and `BootChainLadder` reserve projection functions on each company.  I then identify what the true reserve should have been and subtract the projected reserve amount from the true reserve and then divide that by the standard error estimated by each reserving function.
+The analysis runs the `MackChainLadder` and `BootChainLadder` reserve projection functions on each company.  I then identify what the true reserve should have been and subtract the projected reserve amount from the true reserve, then divide that by the standard error estimated by the `ChainLadder` reserving function.
 
 Several steps are invloved in creating the desired visualizations from the cleaned data.  View the [code](https://raw.githubusercontent.com/merlinoa/ractuary-studies/master/chainladder-review.Rmd) for details.
 
@@ -197,8 +200,10 @@ incurred_boot_full <- projection_actual_join(incurred_boot_smry,
                                       incurred_actual_ultimate)
 
 selectInput("projection", "Projection", 
-            choices = list("mack_paid", "mack_incurred",
-                        "boot_paid", "boot_incurred"))
+            choices = list("Mack - Paid" = "mack_paid", 
+                           "Mack - Incurred" = "mack_incurred",
+                           "Boot - Paid" = "boot_paid", 
+                           "Boot - Incurred" = "boot_incurred"))
 
 selectInput("lob", "Lines of Business", 
             choices = list("Workers' Compensation" = "wkcomp",
@@ -231,10 +236,10 @@ renderPlot({
 
 ```
 
-The `BootChainLadder()` function on incurred projection performs better than projections normally distributed around the actual losses!? ... could that be right?
+# Initial Take Aways
 
-# Take Aways
+Both the Mack and Boot paid reserve projections appear to slightly underestimate the actual reserve.  Several factors including inflation could be responsible for this underestimation.
 
-The paid IBNR projections appear to slightly underestimate the actual IBNR.  The incurred IBNR projections tend to be more centralized around the actual IBNR.
+The incurred reserve projections tend to have more projections within 1 and 2 standard errors of the actual reserve than the paid projections.
 
-The `BootChainLadder()` function on incurred losses gave surprisingly accurate IBNR projections.  I will need to dig deeper to find out why it is performing so well.
+The `BootChainLadder()` function on incurred losses gave a significantly more accurate reserve projections than you would expect if the projection was normally distributed around the true mean.
