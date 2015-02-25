@@ -37,6 +37,7 @@ library(ggplot2) # graphics
 library(xtable) # tables
 options(xtable.comment = FALSE)
 options(xtable.type = "html")
+library(shiny)
 
 # package I created to store CAS data
 library(casdata) # devtools::install_github("merlinoa/casdata")
@@ -238,8 +239,8 @@ renderPlot({
 
 # Initial Take Aways
 
-Both the Mack and Boot paid reserve projections appear to slightly underestimate the actual reserve.  Several factors including inflation could be responsible for this underestimation.
+Both the Mack and Boot paid reserve projections appear to slightly underestimate the actual reserve across all lines of business.  Several factors including inflation differences could be responsible for this underestimation.
 
 The incurred reserve projections tend to have more projections within 1 and 2 standard errors of the actual reserve than the paid projections.
 
-The `BootChainLadder()` function on incurred losses gave a significantly more accurate reserve projections than you would expect if the projection was normally distributed around the true mean.
+The `BootChainLadder()` function on incurred losses gave significantly more accurate reserve projections than what would be expected if the projection was normally distributed around the mean.
