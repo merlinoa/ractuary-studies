@@ -207,7 +207,7 @@ incurred_boot_full <- projection_actual_join(incurred_boot_smry,
                                       incurred_actual_ultimate)
 ```
 
-```{r histogram_plots, echo = FALSE, message = FALSE}
+```{r histogram_plots, echo = FALSE, message = FALSE, warning = FALSE}
 # plot paid mack z values
 ggplot(paid_mack_full, aes(x = z, fill = lob)) +
   geom_histogram(colour = "black") +
