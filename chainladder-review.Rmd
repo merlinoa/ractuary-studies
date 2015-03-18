@@ -1,32 +1,23 @@
 ---
-title: "ChainLadder Package: Mack and Boot Projections"
+title: "ChainLadder Package Projections in Action"
 author: "Andy Merlino"
-date: "2015-03-16"
+date: "2015-03-18"
 output: html_document
 fontsize: 12pt
 geometry: margin=1.25in
 ---
 
-### Purpose
+### Abstract
 
-Measure the accuracy of the `ChainLadder::MackChainLadder()` and `ChainLadder::BootChainLadder()` reserve projection functions by comparing the projected reserves to actual insurance losses.
+An insurance reserve is the liability for future insurance payments.  The correct value of a reserve, at any given time, is equal to the ultimate loss (loss amount after all claims have been paid out) less the amount that has already been paid.  Accurately projecting reserves is a major area of focus for actuaries, and many methods have been developed for projecting reserves.  This analysis aims to measure the accuracy of the `ChainLadder::MackChainLadder()` and `ChainLadder::BootChainLadder()` reserve projection functions by comparing the projected reserve to actual insurance losses.
 
-### ChainLadder Package
+### Background
 
-The `ChainLadder` package by Markus Gesmann, Dan Murphy, and Wayne Zhang includes methods for projecting insurance reserves.  An insurance reserve is the liability an insurance policy has to pay for claims.  The correct value of the reserve, at any given time, is equal the ultimate loss amount of the insurance claims less the amount that has already been paid.  Accurately projecting reserves is a major area of focus for actuaries, and many methods have been developed for projecting reserves.  
-
-The Mack and Boot reserve projection methods are calculated by the `ChainLadder` functions, `MackChainLadder()` and `BootChainLadder()`.  `MackChainLadder()` provides a distribution free calculation of the standard error for the chain ladder reserve projection.  `BootChainLadder()` uses bootstap resampling to determine the standard error of the reserve projection.  For more information please see the `ChainLadder` [package vignette](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf).
+The [ChainLadder](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf) package by Markus Gesmann, Dan Murphy, and Wayne Zhang includes functions for estimating reserves.  Two of these functions, `MackChainLadder()` and `BootChainLadder()`, are the focus of this analysis.  `MackChainLadder()` provides a distribution free calculation of the standard error of the reserve projection.  `BootChainLadder()` uses bootstap resampling to determine the standard error of the reserve projection.  Both the `MackChainLadder()` and `BootChainLadder()` functions can take paid or incurred losses as their argument.  When either of the functions take paid losses as its argument, the function projects the entire outstanding reserve, but when it takes incurred losses it only projects the IBNR (incurred but not reported) portion of the reserve.  I treat paid and incurred projections identically, and refer to the liability they are projecting as the reserve.
 
 ### Data
 
-The CAS website provides historic U.S. insurance loss data across 6 different lines of business and many different companies.  Data from origin years 1988 through 1997 evaluated as of 1997 (i.e. the upper left triangle of losses) is used to run the `ChainLadder` projections.  The CAS data sets include actual losses developed for 10 years for all the provided origin years.  The following lines of business are included in the data set:
-
-* Workers' Compensation
-* Private Passenger Auto
-* Commercial Auto
-* Medical Malpractice
-* Other Liability
-* Product liability
+The CAS website provides historic U.S. insurance loss data across 6 different lines of business and many different companies.  Data from origin years 1988 through 1997 evaluated at each year end (i.e. the upper left triangle of losses) is used to run the `ChainLadder` functions.  In addition to the upper left triangle, the CAS data set includes actual losses for each origin year developed for 10 years; thus we can compare the projected reserve to the actual loss after 10 development years.
 
 For more information on the data see the [CAS webpage](http://www.casact.org/research/index.cfm?fa=loss_reserves_data).
 
@@ -46,13 +37,12 @@ library(casdata) # devtools::install_github("merlinoa/casdata")
 paid_cutoff <- 200
 ```
 
-### A little data cleaning
-
-Several companies were removed from the analysis for various reasons.  The most common reason I removed a company from the analysis was that it had incomplete loss information.  To see all the code used to clean the data see the [.Rmd file on github](https://raw.githubusercontent.com/merlinoa/ractuary-studies/master/chainladder-review.Rmd).
-
-The following table breaks down the number of companies included in this study by line of business.
+The following table breaks down the number of companies included in this analysis by line of business.
 
 ```{r data_cleaning, echo = FALSE, results = "asis"}
+# Several companies were removed from the analysis because they 
+# had incomplete or very few losses at one or more evaluation points.
+
 # identify unique companies that have missing data.
 # I also had some trouble with companies that had very small losses, so I decided
 # to remove all companies with cumulative paid losses less than some value 
@@ -82,13 +72,16 @@ print(df_out,
 
 ### Analysis
 
-The analysis runs the `MackChainLadder` and `BootChainLadder` reserve projection functions on each company.  I then identify what the true reserve should have been and subtract the projected reserve amount from the true reserve to find the error in the projection.  To compare the error in the projection across the different companies with varying exposure amounts I divide the projection error by the standard error of the projection estimated by the `ChainLadder` reserving function.  The analysis is simply interested in the value $Z$, where:
+I run the `MackChainLadder` and `BootChainLadder` reserve projection functions on each company.  I subtract the projected reserve from the actual reserve (paid after 10 development year less paid at time of projection) to arrive at the projection error.  To compare the projection error across the different companies, I divide the projection error by the estimated projection standard error.  Put a little more formally, I are simply interested in the value $Z$, where:
 
 $Z = \frac{(p - \hat{p})}{\hat{se(\hat{p})}}$
 
-Where $\hat{p}$ is the projected reserve $\hat{se(\hat{p})}$ is the estimated standard error of the projected reserve and $p$ is the actual reserve.
+Where: 
+* $\hat{p}$ is the projected reserve. 
+* $\hat{se(\hat{p})}$ is the estimated standard error of the projected reserve. 
+* $p$ is the actual reserve.  Where the actual reserve is the paid amount after 10 development years less the paid amount at the time of the projection estimate.
 
-View the [code](https://raw.githubusercontent.com/merlinoa/ractuary-studies/master/chainladder-review.Rmd) if you want to get into the details.
+The following histograms should provide a visual interpretation of how the reserve projection errors are distributed around the reserve projection.
 
 ```{r create_triangles, echo = FALSE}
 # function: to create triangles for each company
@@ -120,7 +113,7 @@ paid_triangles <- triangles(df ,loss_type = "paid")
 incurred_triangles <- triangles(df, loss_type = "incurred")
 ```
 
-```{r projections_functions, echo = FALSE, warning = FALSE}
+```{r projection_functions, echo = FALSE, warning = FALSE}
 # function for mack and boot projections============================================
 # param triangles list of all company triangles
 # param method character "MackChainLadder" or "BootChainLadder"
@@ -243,4 +236,8 @@ Both the Mack and Boot paid reserve projections appear to slightly underestimate
 
 The incurred reserve projections tend to have more projections within 1 and 2 standard errors of the actual reserve than the paid projections.
 
-The `BootChainLadder()` function on incurred losses gave significantly more accurate reserve projections than what would be expected if the projection was normally distributed around the mean.
+The `BootChainLadder()` function on incurred losses gave significantly more accurate reserve projections than what would be expected if the projection errors were normally distributed around the projection.
+
+### The Code
+
+View the [code](https://raw.githubusercontent.com/merlinoa/ractuary-studies/master/chainladder-review.Rmd) if you want to get into the details.
