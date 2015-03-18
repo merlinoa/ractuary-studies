@@ -9,15 +9,15 @@ geometry: margin=1.25in
 
 ### Abstract
 
-An insurance reserve is the liability for future insurance payments.  The correct value of a reserve, at any given time, is equal to the ultimate loss (loss amount after all claims have been paid out) less the amount that has already been paid.  Accurately projecting reserves is a major area of focus for actuaries, and many methods have been developed for projecting reserves.  This analysis aims to measure the accuracy of the `ChainLadder::MackChainLadder()` and `ChainLadder::BootChainLadder()` reserve projection functions by comparing the projected reserve to actual insurance losses.
+An insurance reserve is the liability for future insurance payments.  The correct value of a reserve, at any given time, is equal to the ultimate loss (loss amount after all claims have been paid out) less the amount that has already been paid.  Accurately projecting reserves is a major area of focus for actuaries, and many methods have been developed for projecting reserves.  This analysis aims to measure the accuracy of the `ChainLadder::MackChainLadder()` and `ChainLadder::BootChainLadder()` reserve projection functions by comparing the projected reserves to actual reserves.
 
 ### Background
 
-The [ChainLadder](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf) package by Markus Gesmann, Dan Murphy, and Wayne Zhang includes functions for estimating reserves.  Two of these functions, `MackChainLadder()` and `BootChainLadder()`, are the focus of this analysis.  `MackChainLadder()` provides a distribution free calculation of the standard error of the reserve projection.  `BootChainLadder()` uses bootstap resampling to determine the standard error of the reserve projection.  Both the `MackChainLadder()` and `BootChainLadder()` functions can take paid or incurred losses as their argument.  When either of the functions take paid losses as its argument, the function projects the entire outstanding reserve, but when it takes incurred losses it only projects the IBNR (incurred but not reported) portion of the reserve.  I treat paid and incurred projections identically, and refer to the liability they are projecting as the reserve.
+The [ChainLadder](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf) package by Markus Gesmann, Dan Murphy, and Wayne Zhang includes functions for estimating reserves.  Two of these functions, `MackChainLadder()` and `BootChainLadder()`, are the focus of this analysis.  `MackChainLadder()` provides a distribution free calculation of the standard error of the reserve projection.  `BootChainLadder()` uses bootstap resampling to determine the standard error of the reserve projection.  Both the `MackChainLadder()` and `BootChainLadder()` functions can take paid or incurred losses as their argument.  When either of the functions take paid losses as its argument, the function projects the entire outstanding reserve, but when it takes incurred losses it only projects the IBNR (incurred but not reported) portion of the reserve.  I refer to the estimated liability using either paid or incurred data as the reserve.
 
 ### Data
 
-The CAS website provides historic U.S. insurance loss data across 6 different lines of business and many different companies.  Data from origin years 1988 through 1997 evaluated at each year end (i.e. the upper left triangle of losses) is used to run the `ChainLadder` functions.  In addition to the upper left triangle, the CAS data set includes actual losses for each origin year developed for 10 years; thus we can compare the projected reserve to the actual loss after 10 development years.
+The CAS website provides historic U.S. insurance loss data across 6 different lines of business and many different companies.  Data from origin years 1988 through 1997 evaluated at each year end (i.e. the upper left triangle of losses) is used to run the `ChainLadder` functions.  In addition to the upper left triangle, the CAS data set includes actual losses for each origin year developed for 10 years; thus we can compare the projected reserve to the actual reserve after 10 development years.
 
 For more information on the data see the [CAS webpage](http://www.casact.org/research/index.cfm?fa=loss_reserves_data).
 
@@ -72,14 +72,17 @@ print(df_out,
 
 ### Analysis
 
-I run the `MackChainLadder` and `BootChainLadder` reserve projection functions on each company.  I subtract the projected reserve from the actual reserve (paid after 10 development year less paid at time of projection) to arrive at the projection error.  To compare the projection error across the different companies, I divide the projection error by the estimated projection standard error.  Put a little more formally, I are simply interested in the value $Z$, where:
+I run the `MackChainLadder()` and `BootChainLadder()` reserve projection functions on each company.  I subtract the projected reserve from the actual reserve to arrive at the projection error.  To compare the projection error across the different companies, I divide the projection error by the estimated projection standard error.  Put a little more formally, I am simply interested in the value $Z$, where:
 
 $Z = \frac{(p - \hat{p})}{\hat{se(\hat{p})}}$
 
 Where: 
+
 * $\hat{p}$ is the projected reserve. 
 * $\hat{se(\hat{p})}$ is the estimated standard error of the projected reserve. 
-* $p$ is the actual reserve.  Where the actual reserve is the paid amount after 10 development years less the paid amount at the time of the projection estimate.
+* $p$ is the actual reserve.  Where the actual reserve is the paid or incurred amount after 10   development years less the paid or incurred amount at the time of the projection estimate.
+
+Note: Our latest loss data is not necessarily developed to the ultimate loss amounts.  It is developed for 10 years; thus the paid and incurred loss values at the 10th development year may not be equal to one another.  Due to this possible discrepancy we define the actual reserve for projections based on paid data as the paid loss at the 10th development year less the paid loss at the time of the projection.  But for projections based on incurred data, we define the actual reserve as the incurred loss at the 10th development year less the incurred loss at the time of the projection.
 
 The following histograms should provide a visual interpretation of how the reserve projection errors are distributed around the reserve projection.
 
@@ -232,11 +235,11 @@ ggplot(incurred_boot_full, aes(x = z, fill = lob)) +
 
 ### Initial Take Aways
 
-Both the Mack and Boot paid reserve projections appear to slightly underestimate the actual reserve across all lines of business.  Several factors including inflation differences could be responsible for this underestimation.
+Both the Mack and Boot paid reserve projections appear to slightly overestimate the actual reserve across all lines of business.  Several factors could be responsible for this overestimation (e.g. higher inflation in the years used to estimate the reserve than in the years after 1997).
 
-The incurred reserve projections tend to have more projections within 1 and 2 standard errors of the actual reserve than the paid projections.
+The incurred reserve projection errors tend to be more clustered around the projected reserve than the paid reserve projections.
 
-The `BootChainLadder()` function on incurred losses gave significantly more accurate reserve projections than what would be expected if the projection errors were normally distributed around the projection.
+The `BootChainLadder()` function on incurred losses gave significantly more accurate reserve projections than what would be expected if the projection errors were normally distributed around the reserve projection.
 
 ### The Code
 
