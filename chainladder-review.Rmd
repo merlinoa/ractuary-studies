@@ -7,8 +7,6 @@ fontsize: 12pt
 geometry: margin=1.25in
 ---
 
-### Abstract
-
 An insurance reserve is the liability for future insurance payments.  The correct value of a reserve, at any given time, is equal to the ultimate loss (loss amount after all claims have been paid out) less the amount that has already been paid.  Accurately projecting reserves is a major area of focus for actuaries, and many methods have been developed for projecting reserves.  This analysis aims to measure the accuracy of the `ChainLadder::MackChainLadder()` and `ChainLadder::BootChainLadder()` reserve projection functions by comparing the projected reserves to actual reserves.
 
 ### Background
