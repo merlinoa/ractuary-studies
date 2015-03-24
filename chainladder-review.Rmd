@@ -7,11 +7,11 @@ fontsize: 12pt
 geometry: margin=1.25in
 ---
 
-An insurance reserve is the liability for future insurance payments.  The correct value of a reserve, at any given time, is equal to the ultimate loss (loss amount after all claims have been paid out) less the amount that has already been paid.  Accurately projecting reserves is a major area of focus for actuaries, and many methods have been developed for projecting reserves.  This analysis aims to measure the accuracy of the `ChainLadder::MackChainLadder()` and `ChainLadder::BootChainLadder()` reserve projection functions by comparing the projected reserves to actual reserves.
+An insurance reserve is the liability for future insurance payments.  The correct value of a reserve, at any given time, is equal to the ultimate loss (loss amount after all claims have been paid out) less the amount that has already been paid.  This analysis aims to measure the accuracy of the `ChainLadder::MackChainLadder()` and `ChainLadder::BootChainLadder()` reserve projection functions by comparing the projected reserves to actual reserves.
 
 ### Background
 
-The [ChainLadder](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf) package by Markus Gesmann, Dan Murphy, and Wayne Zhang includes functions for estimating reserves.  Two of these functions, `MackChainLadder()` and `BootChainLadder()`, are the focus of this analysis.  `MackChainLadder()` provides a distribution free calculation of the standard error of the reserve projection.  `BootChainLadder()` uses bootstap resampling to determine the standard error of the reserve projection.  Both the `MackChainLadder()` and `BootChainLadder()` functions can take paid or incurred losses as their argument.  When either of the functions take paid losses as its argument, the function projects the entire outstanding reserve, but when it takes incurred losses it only projects the IBNR (incurred but not reported) portion of the reserve.  I refer to the estimated liability using either paid or incurred data as the reserve.
+The [ChainLadder](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf) package by Markus Gesmann, Dan Murphy, and Wayne Zhang includes functions for estimating reserves.  `MackChainLadder()` provides a distribution free calculation of the standard error of the reserve projection.  `BootChainLadder()` uses two stage bootstrap/simulation technique to determine the standard error of the reserve projection.  Both the `MackChainLadder()` and `BootChainLadder()` functions can take paid or incurred losses as their argument.  When either of the functions take paid losses as its argument, the function projects the entire outstanding reserve, but when it takes incurred losses it only projects the IBNR (incurred but not reported) portion of the reserve.  I refer to the estimated liability using either paid or incurred data as the reserve.
 
 ### Data
 
@@ -80,11 +80,18 @@ Where:
 * $\hat{se(\hat{p})}$ is the estimated standard error of the projected reserve. 
 * $p$ is the actual reserve.  Where the actual reserve is the paid or incurred amount after 10   development years less the paid or incurred amount at the time of the projection estimate.
 
-Note: Our latest loss data is not necessarily developed to the ultimate loss amounts.  It is developed for 10 years; thus the paid and incurred loss values at the 10th development year may not be equal to one another.  Due to this possible discrepancy we define the actual reserve for projections based on paid data as the paid loss at the 10th development year less the paid loss at the time of the projection.  But for projections based on incurred data, we define the actual reserve as the incurred loss at the 10th development year less the incurred loss at the time of the projection.
-
 The following histograms should provide a visual interpretation of how the reserve projection errors are distributed around the reserve projection.
 
 ```{r create_triangles, echo = FALSE}
+# Note: Our latest loss data is not necessarily developed to the ultimate loss
+# amounts.  It is developed for 10 years; thus the paid and incurred loss values at
+# the 10th development year may not be equal to one another.  Due to this possible
+# discrepancy we define the actual reserve for projections based on paid data as the
+# paid loss at the 10th development year less the paid loss at the time of the
+# projection.  But for projections based on incurred data, we define the actual
+# reserve as the incurred loss at the 10th development year less the incurred loss at
+# the time of the projection.
+
 # function: to create triangles for each company
 # param data the cleaned insurance loss data frame; `df`
 # param loss_type character "CumPaidLoss_D" or "IncurLoss_D"
