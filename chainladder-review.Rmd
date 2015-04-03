@@ -11,7 +11,9 @@ An insurance reserve is the liability for future insurance payments.  The correc
 
 ### Background
 
-The [ChainLadder](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf) package by Markus Gesmann, Dan Murphy, and Wayne Zhang includes functions for estimating reserves.  `MackChainLadder()` provides a distribution free calculation of the standard error of the reserve projection.  `BootChainLadder()` uses two stage bootstrap/simulation technique to determine the standard error of the reserve projection.  Both the `MackChainLadder()` and `BootChainLadder()` functions can take paid or incurred losses as their argument.  When either of the functions take paid losses as its argument, the function projects the entire outstanding reserve, but when it takes incurred losses it only projects the IBNR (incurred but not reported) portion of the reserve.  I refer to the estimated liability using either paid or incurred data as the reserve.
+The [ChainLadder](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf) package by Markus Gesmann, Dan Murphy, and Wayne Zhang includes functions for estimating reserves.  `MackChainLadder()` provides a distribution free calculation of the standard error of the reserve projection.  `BootChainLadder()` uses two stage bootstrap/simulation technique to determine the standard error of the reserve projection.  
+
+Both the `MackChainLadder()` and `BootChainLadder()` functions can take paid or incurred losses as their argument.  When either of the functions take paid losses as its argument, the function projects the entire outstanding reserve, but when it takes incurred losses it only projects the IBNR (incurred but not reported) portion of the reserve.  I refer to the estimated liability using either paid or incurred data as the reserve.
 
 ### Data
 
@@ -70,13 +72,13 @@ print(df_out,
 
 ### Analysis
 
-I run the `MackChainLadder()` and `BootChainLadder()` reserve projection functions on each company.  I subtract the projected reserve from the actual reserve to arrive at the projection error.  To compare the projection error across the different companies, I divide the projection error by the estimated projection standard error.  Put a little more formally, I am simply interested in the value $Z$, where:
+I run the `MackChainLadder()` and `BootChainLadder()` reserve projection functions on each company.  I subtract the projected reserve from the actual reserve to arrive at the projection error.  To normalize the projection error, I divide the projection error by the estimated projection standard error.  Put a little more formally, I am simply interested in the normalized projection error, $Z$, where:
 
 $Z = \frac{(p - \hat{p})}{\hat{se(\hat{p})}}$
 
 Where: 
 
-* $\hat{p}$ is the projected reserve. 
+* $\hat{p}$ is the projected reserve.
 * $\hat{se(\hat{p})}$ is the estimated standard error of the projected reserve. 
 * $p$ is the actual reserve.  Where the actual reserve is the paid or incurred amount after 10   development years less the paid or incurred amount at the time of the projection estimate.
 
@@ -212,28 +214,28 @@ incurred_boot_full <- projection_actual_join(incurred_boot_smry,
 # plot paid mack z values
 ggplot(paid_mack_full, aes(x = z, fill = lob)) +
   geom_histogram(colour = "black") +
-  xlab("Z") +
+  xlab("Normalized Projection Error - Z") +
   ggtitle("Mack Projection - Paid Basis") +
   geom_bar()
 
 # plot incurred mack z values
 ggplot(incurred_mack_full, aes(x = z, fill = lob)) +
   geom_histogram(colour = "black") +
-  xlab("Z") +
+  xlab("Normalized Projection Error - Z") +
   ggtitle("Mack Projection - Incurred Basis") +
   geom_bar()
 
 # plot paid boot z values
 ggplot(paid_boot_full, aes(x = z, fill = lob)) +
   geom_histogram(colour = "black") +
-  xlab("Z") +
+  xlab("Normalized Projection Error - Z") +
   ggtitle("Boot Projection - Paid Basis") +
   geom_bar()
 
 # plot incurred boot z values
 ggplot(incurred_boot_full, aes(x = z, fill = lob)) +
   geom_histogram(colour = "black") +
-  xlab("Z") +
+  xlab("Normalized Projection Error - Z") +
   ggtitle("Boot Projection - Incurred Basis") +
   geom_bar()
 ```
@@ -242,9 +244,9 @@ ggplot(incurred_boot_full, aes(x = z, fill = lob)) +
 
 Both the Mack and Boot paid reserve projections appear to slightly overestimate the actual reserve across all lines of business.  Several factors could be responsible for this overestimation (e.g. higher inflation in the years used to estimate the reserve than in the years after 1997).
 
-The incurred reserve projection errors tend to be more clustered around the projected reserve than the paid reserve projections.
+The incurred normalized projection errors tend to be smaller in absolute value terms than the paid reserve projections.
 
-The `BootChainLadder()` function on incurred losses gave significantly more accurate reserve projections than what would be expected if the projection errors were normally distributed around the reserve projection.
+The `BootChainLadder()` function on incurred losses gave significantly more accurate reserve projections than what would be expected if the projection errors were from the standard normal distribution.
 
 ### The Code
 
