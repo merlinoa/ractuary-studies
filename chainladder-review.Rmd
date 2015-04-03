@@ -7,6 +7,8 @@ fontsize: 12pt
 geometry: margin=1.25in
 ---
 
+[source code](https://raw.githubusercontent.com/merlinoa/ractuary-studies/master/chainladder-review.Rmd)
+
 An insurance reserve is the liability for future insurance payments.  The correct value of a reserve, at any given time, is equal to the ultimate loss (loss amount after all claims have been paid out) less the amount that has already been paid.  This analysis aims to measure the accuracy of the `ChainLadder::MackChainLadder()` and `ChainLadder::BootChainLadder()` reserve projection functions by comparing the projected reserves to actual reserves.
 
 ### Background
@@ -247,7 +249,3 @@ Both the Mack and Boot paid reserve projections appear to slightly overestimate 
 The incurred normalized projection errors tend to be smaller in absolute value terms than the paid reserve projections.
 
 The `BootChainLadder()` function on incurred losses gave significantly more accurate reserve projections than what would be expected if the projection errors were from the standard normal distribution.
-
-### The Code
-
-View the [code](https://raw.githubusercontent.com/merlinoa/ractuary-studies/master/chainladder-review.Rmd) if you want to get into the details.
