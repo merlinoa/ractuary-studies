@@ -1,0 +1,39 @@
+---
+title: "Life Insurance Simulation"
+author: "Andy Merlino"
+date: "June 4, 2015"
+output: html_document
+---
+
+
+We provide whole like insurance.  How much money do we need to set aside today to have a 90% chance that we can payout the entire benefit at the end of each year that each individual dies.
+
+```{r load_stuff, echo = FALSE}
+library(lifetable) # ractuary package
+library(knitr)
+
+policies <- read.csv("policies.csv")
+
+options(scipen=999)
+```
+
+Here is what the policies we currently insure look like.
+
+```{r view_policies, echo=FALSE, results = "asis"}
+kable(policies)
+```
+
+As you can see, we have male and female insurees of varying ages.  They also have varying benefits.
+
+We are using the official 2010 US social security life table.  This is the table's structure:
+
+```{r view_qx_table}
+str(lifetable::qx_data)
+```
+
+Classify each policy as a Z_x object
+
+```{r}
+```
+
+Simulate
