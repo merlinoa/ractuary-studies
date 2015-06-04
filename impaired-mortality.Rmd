@@ -5,7 +5,7 @@ date: "03/19/2015"
 output: html_document
 ---
 
-In practice government organizations often set aside money to cover medical care for disabled individuals.  Having an accurate model of life expectancy for the individuals receiving the medical benefits is necessary to properly fund the pool.  small sample is all that the actuary has to estimate the impaired mortality.
+In practice government organizations often set aside money to cover medical care for disabled individuals.  Having an accurate model of life expectancy for the individuals receiving the medical benefits is necessary to properly fund health care.
 
 Mortality tables can be used to estimate the probability of an individual dieing at a particular age.  The standard mortality table is used for the overall population.  For people with life shortening disabilities, standard mortality is not an accurate mortality model.  A common way to model impaired mortality is to adjust the standard mortality table in such a way that it is appropriate for the impaired population.  I will use the Propotional Life Expectancy (PLE) mortality table adjustment technique in this analysis.  
 
@@ -16,4 +16,10 @@ The PLE
 ```
 
 ```{r, echo=FALSE}
+
+
+
+
+
+
 ```
