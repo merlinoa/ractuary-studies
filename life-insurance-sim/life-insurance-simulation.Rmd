@@ -34,6 +34,24 @@ str(lifetable::qx_data)
 Classify each policy as a Z_x object
 
 ```{r}
+qx_male <- LifeTable(x = qx_data$x, q_x = qx_data$male_qx)
+qx_male <- ActuarialTable(i = rep(0.04, times = length(qx_male@x)), qx_male)
+
+qx_female <- LifeTable(x = qx_data$x, q_x = qx_data$female_qx)
+qx_female <- ActuarialTable(i = rep(0.04, times = length(qx_female@x)), qx_female)
 ```
 
 Simulate
+```{r}
+# find the probability of dieing at each age
+#qx, tpx
+test <- Z_x(x_ = policies$age[2], payable = policies$policy[2], qx_male)
+
+# make simulation a lifetable generic
+mqx <- list(vector, length(test@qx[x_:length()]))
+mqx[1] <- test@qx[1]
+for (j in 2:length(qx)) {
+    mqx[j] <- tpx[j - 1] * qx[j]
+}
+unlist(mqx)
+```
