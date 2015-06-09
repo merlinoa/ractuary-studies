@@ -6,7 +6,9 @@ output: html_document
 ---
 
 
-We provide whole like insurance.  How much money do we need to set aside today to have a 90% chance that we can payout the entire benefit at the end of each year that each individual dies.
+We provide whole life insurance.  
+
+How much money do we need to set aside today to have a probability, p, that we can payout the entire life insurance  benefit to all insurees?
 
 ```{r load_stuff, echo = FALSE}
 library(lifetable) # ractuary package
@@ -17,7 +19,7 @@ policies <- read.csv("policies.csv")
 options(scipen=999)
 ```
 
-Here is what the policies we currently insure look like.
+These are the life insurance policies we insure.
 
 ```{r view_policies, echo=FALSE, results = "asis"}
 kable(policies)
@@ -25,33 +27,41 @@ kable(policies)
 
 As you can see, we have male and female insurees of varying ages.  They also have varying benefits.
 
-We are using the official 2010 US social security life table.  This is the table's structure:
+We will use the official 2010 US social security life table as provided on the [Official Social Security Website](http://www.ssa.gov/oact/STATS/table4c6.html).
 
-```{r view_qx_table}
-str(lifetable::qx_data)
-```
+```{r life_tables, echo = FALSE}
+rate <- 0.04
+n <- 1000
 
-Classify each policy as a Z_x object
-
-```{r}
 qx_male <- LifeTable(x = qx_data$x, q_x = qx_data$male_qx)
-qx_male <- ActuarialTable(i = rep(0.04, times = length(qx_male@x)), qx_male)
+qx_male <- ActuarialTable(i = rep(rate, times = length(qx_male@x)), qx_male)
 
 qx_female <- LifeTable(x = qx_data$x, q_x = qx_data$female_qx)
-qx_female <- ActuarialTable(i = rep(0.04, times = length(qx_female@x)), qx_female)
+qx_female <- ActuarialTable(i = rep(rate, times = length(qx_female@x)), qx_female)
 ```
 
-Simulate
-```{r}
-# find the probability of dieing at each age
-#qx, tpx
-test <- Z_x(x_ = policies$age[2], payable = policies$policy[2], qx_male)
+We simulate each individuals death in accordance with the multinomial distribution specified by either the male or femal qx table and the individual's age.  We run `r n` observations of each individual's future life expectancy.  We assume each individual future life expectancy is independent and identically distributed.  We discount the death benefit, assuming a `r rate * 100` % interest rate, for the number of years the insuree survives.  All death benefits are paid at the end of the year of death.
 
-# make simulation a lifetable generic
-mqx <- list(vector, length(test@qx[x_:length()]))
-mqx[1] <- test@qx[1]
-for (j in 2:length(qx)) {
-    mqx[j] <- tpx[j - 1] * qx[j]
+```{r}
+# use lifetable package to define each policy as a Z_x object
+hold <- list()
+for (j in 1:nrow(policies)) {
+  hold[[j]] <- if (policies$gender[j] == "male") {
+    lifetable::Z_x(x_ = policies$age[j], 
+                    t_ = max(qx_male@x) - policies$age[j],
+                    benefit = policies$policy[j], 
+                    qx_male)
+  } else {
+    lifetable::Z_x(x_ = policies$age[j], 
+                    t_ = max(qx_female@x) - policies$age[j],
+                    benefit = policies$policy[j], 
+                    qx_female)
+  }
 }
-unlist(mqx)
+
+# make simulation a lifetable generic\
+out <- lapply(hold, function(k) lifetable::rdeath(k, n = n)$pv)
+out <- matrix(unlist(out), ncol = n, byrow = TRUE)
+total <- apply(out, 2, sum)
+c(mean = mean(total), quantile(total, seq(0.70, 0.95, by = 0.05)))
 ```
