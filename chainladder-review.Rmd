@@ -13,9 +13,7 @@ This analysis aims to measure the accuracy of the `ChainLadder::MackChainLadder(
 
 ### Background
 
-An insurance reserve is the insurer's liability for future payments.  The correct value of a reserve, at any given time, is equal to the ultimate loss (loss amount after all claims have been paid out) less the amount that has already been paid.
-
-The [ChainLadder](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf) package by Markus Gesmann, Dan Murphy, and Wayne Zhang includes functions for estimating reserves.  `MackChainLadder()` provides a distribution free calculation of the standard error of the reserve projection.  `BootChainLadder()` uses two stage bootstrap/simulation technique to determine the standard error of the reserve projection.
+The [ChainLadder](http://cran.r-project.org/web/packages/ChainLadder/vignettes/ChainLadder.pdf) package by Markus Gesmann, Dan Murphy, and Wayne Zhang includes functions for estimating reserves.  `MackChainLadder()` provides a distribution free calculation of the standard error of the reserve projection.  `BootChainLadder()` uses a two stage bootstrap/simulation technique to determine the standard error of the reserve projection.
 
 ### Data
 
